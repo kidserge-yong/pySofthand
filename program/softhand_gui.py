@@ -26,6 +26,7 @@ except ImportError:
 
 try:
     sys.path.append('../module/')
+    from qbrobot2 import *
     from menu import *
 except ImportError:
     raise RuntimeError('cannot import module, make sure sys.path is correct')

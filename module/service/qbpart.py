@@ -1,6 +1,6 @@
 import serial
 import serial.rs485 as rs485
-from qbcommand import *
+from service.qbcommand import *
 from serial.tools import list_ports
 import time
 

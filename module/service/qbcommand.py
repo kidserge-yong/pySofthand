@@ -2,7 +2,7 @@ from enum import Enum
 
 API_VERSION = "v6.2.0"
 INFO_ALL = 0
-
+BAUD_RATE = 2000000
 BAUD_RATE_T_2000000    = 0           #//< Define to identify 2M baudrate
 BAUD_RATE_T_460800     = 1           #//< Define to identify 460.8k baudrate
 MAX_WATCHDOG_TIME      = 500         #//< Maximum watchdog timer time

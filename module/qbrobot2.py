@@ -18,47 +18,54 @@ def threaded(fn):
         return thread
     return wrapper
 
-class Qbrobot():
-
-    ROBOT_NAME = "Qbrobot"
-
-    @staticmethod
-    def qbrobot_init(data):
-        data[ROBOT_NAME] = 
-
-class robot2():
-    TIME_CYCLE = 0.01
-    TIME_OUT = 30 * 30 # 900 second for 15 minutes without communication
-
-    part = []
-
 
 
 class robot():
-    ser = serial.Serial()
-    lsl = False
-    start = False
 
-    part = []
+    def __init__(self, port = None):
+        self.lsl = False
+        self.start = False
 
-    update_timer = None
-    lsl_timer = None
-    pos_outlet = None
-    cur_outlet = None
-    
-    handle_receive = []35
-    handle_get = []
+        self.part = []
+        
+        self.ser = None
+        self.update_timer = None
+        self.lsl_timer = None
+        self.pos_outlet = None
+        self.cur_outlet = None
+        
+        self.handle_receive = []
+        self.handle_get = []
 
-    def __init__(self, auto_port = True):
-        if auto_port:
+        if port == None:
+
+            def portlist():
+                comlist = list_ports.comports()
+                id = 0
+                for element in comlist:
+                    if element:
+                        id = id + 1
+                        print("ID: " + str(id) + " -- Portname: " + str(element) + "\n")
+                port = int(input("Enter a port number: "))
+                if DEBUG:
+                    print("You select " + str(comlist[port-1]))
+                return comlist[port-1]
+                
             self.openRS485(portlist())
             self.part.append(part(1, "Hand Grip/Open", "softhand", self.ser))
             self.part.append(part(2, "Wrist Flex/Exten", "qbmove",self.ser))
             self.part.append(part(3, "Wrist Pron/Supi", "qbmove", self.ser))
 
-            self.ser.write(self.part[0].comActivate(True))
-            self.ser.write(self.part[1].comActivate(True))
-            self.ser.write(self.part[2].comActivate(True))
+            for item in self.part:
+                self.ser.write(item.comActivate(True))
+        else:
+            self.openRS485(port)
+
+
+    def add_part(self, device_id:int = 1, name="", dtype="softhand"):
+        self.part.append(part(device_id, name, dtype, self.ser))
+        self.ser.write(self.part[-1].comActivate(True))
+        
 
     def start_lsl(self, interval = 0.01):
         self.pos_outlet = StreamOutlet(StreamInfo('Softhand Position Data', 'Position', 3 * len(self.part), 100, 'int16', 'myshpos20191002'))
