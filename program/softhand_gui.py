@@ -15,6 +15,7 @@ import weakref
 try:
     import pygame
     import pygame_menu
+    import pygame_gui
 except ImportError:
     raise RuntimeError('cannot import pygame, make sure pygame package is installed')
 
@@ -30,19 +31,159 @@ except ImportError:
     raise RuntimeError('cannot import module, make sure sys.path is correct')
 
 # ==============================================================================
+# -- control_interface() -------------------------------------------------------
+# ==============================================================================
+
+class control_interface():
+    def __init__(self, surface, manager, 
+        v_offset = 50, h_offset = 40, 
+        text_width = 80, 
+        button_width = 150, 
+        element_height = 50,
+        pos = (0, 0)
+        ):
+
+        self.surface = surface
+        self.manager = manager
+
+        
+        self.v_offset = v_offset
+        self.h_offset = h_offset
+        self.text_width = text_width
+        self.button_width = button_width
+        self.element_height = element_height
+
+        self.create_ui(self.surface, self.manager, pos)
+
+    def create_ui(self, surface, manager, start_pos = (0,0)):
+        self.width, self.height = surface.get_size()
+
+        v_offset, h_offset = self.v_offset, self.h_offset
+        status_width, status_height = self.width, self.element_height
+        text_width, text_height = self.text_width, self.element_height
+        slider_width, slider_height = int(self.width * 0.9), self.element_height
+        button_width, button_height = 150, self.element_height
+        h_start, v_start = start_pos
+
+        self.status_label = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(((self.width - status_width)//2 + h_start , v_offset*0+10 + v_start), 
+            (status_width, status_height)),
+            text = "Initialization",
+            manager = manager
+            )
+
+        self.max_label = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(((self.width - slider_width)//2 + slider_width - text_width + h_start, v_offset*2-text_height + v_start), 
+            (text_width, text_height)),
+            text = "1.0",
+            manager = manager
+            )
+
+        self.min_label = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(((self.width - slider_width)//2 + h_start, v_offset*2-text_height + v_start), 
+            (text_width, text_height)),
+            text = "0.0",
+            manager = manager
+            )
+
+        self.text_box = pygame_gui.elements.UITextEntryLine(
+            relative_rect=pygame.Rect(((self.width - text_width)//2 + h_start, v_offset*1+20 + v_start), 
+            (text_width, text_height)),
+            manager = manager
+            )
+        self.text_box.set_text("0.00")
+
+        self.slider_bar = pygame_gui.elements.UIHorizontalSlider(
+            relative_rect=pygame.Rect(((self.width - slider_width)//2 + h_start, v_offset*2 + v_start), 
+            (slider_width, slider_height)),
+            start_value=0,
+            value_range=[0.0, 1.0],
+            manager=manager
+            )
+
+        self.reset_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(((self.width - text_width)//2 + h_start , v_offset*3 + v_start), 
+            (text_width, text_height)),
+            text = "Reset",
+            manager=manager
+            )
+
+    def interaction(self, event):
+        if event.user_type == pygame_gui.UI_TEXT_ENTRY_FINISHED:
+            if event.ui_element == self.text_box:
+                try:
+                    text_value = float(event.text)
+                    if self.slider_bar.value_range[0] <= text_value <= self.slider_bar.value_range[1]:
+                        self.slider_bar.set_current_value(text_value)
+                        self.status_label.set_text("Set new value")
+                    else:
+                        self.status_label.set_text("Outside value range :" + str(self.slider_bar.value_range))
+                except ValueError:
+                    self.status_label.set_text("Please input number")
+                
+        elif event.user_type == pygame_gui.UI_HORIZONTAL_SLIDER_MOVED:
+            if event.ui_element == self.slider_bar:
+                self.text_box.set_text("%.2f" % (event.value))
+                self.status_label.set_text("Set new value")
+
+        elif event.user_type == pygame_gui.UI_BUTTON_PRESSED:
+            if event.ui_element == self.reset_button:
+                self.text_box.set_text("%.2f" % (0.0))
+                self.slider_bar.set_current_value(0.0)
+                self.status_label.set_text("Reset Completed")
+
+
+# ==============================================================================
 # -- main_loop() ---------------------------------------------------------------
 # ==============================================================================
 
-def main_loop(args):
+def main_loop(args=0):
+    width = 600
+    height = 200
+    BLACK = (0, 0, 0)
+    WHITE = (255, 255, 255)
 
+    pygame.init()
+
+    pygame.display.set_caption('QBRobot controller')
+    surface = pygame.display.set_mode((width, height*3))
+    manager = pygame_gui.UIManager((width, height*3))
     
+    ci = []
 
-    try:
-        print(args)
-        input()
+    for i in range(3):
+        ci.append(control_interface(surface, manager, pos = (0, height*i)))
 
-    except KeyboardInterrupt:
-        print('\nCancelled by user. Bye!')
+    clock = pygame.time.Clock()
+
+    is_running = True
+
+    while is_running:
+        time_delta = clock.tick(60)/1000.0
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                is_running = False
+            elif event.type == pygame.USEREVENT:
+                for item in ci:
+                    item.interaction(event)
+
+
+
+            manager.process_events(event)
+
+        manager.update(time_delta)
+
+        
+        manager.draw_ui(surface)
+
+        pygame.display.update()
+
+    # try:
+    #     print(args)
+    #     input()
+
+    # except KeyboardInterrupt:
+    #     print('\nCancelled by user. Bye!')
 
 
 # ==============================================================================
@@ -94,4 +235,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    #main()
+    main_loop()
