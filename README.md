@@ -24,9 +24,13 @@ py -3.7 -m pip install -r requirement.txt
 ```
 
 #### Run softhand gui
-Move to root folder and run
+Move to root folder program 
 ```sh
-py -3.7 -m program/softhand_gui.py
+cd program
+```
+and run
+```sh
+py -3.7 -m softhand_gui.py
 ```
 Check serial port that connect with your qbrobot or softhand
 
