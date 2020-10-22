@@ -170,7 +170,7 @@ def main_loop(args=0):
 
     pygame.display.set_caption('QBRobot controller')
     surface = pygame.display.set_mode((width, height), pygame.RESIZABLE)
-    manager = pygame_gui.UIManager((width, height))
+    manager = pygame_gui.UIManager((width, height), 'theme.json')
     
     ci = []
     limit = [
@@ -198,18 +198,12 @@ def main_loop(args=0):
                     item.interaction(event)
             elif event.type == pygame.VIDEORESIZE:
                 surface = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
-                manager = pygame_gui.UIManager((event.w, event.h))
+                manager = pygame_gui.UIManager((event.w, event.h), 'theme.json')
                 ci = []
                 for i in range(3):
                     ci.append(control_interface(surface, manager, pos = (0, event.h/3*i)))
                     ci[i].set_function(softhand.get_part(i+1).sendPosStiff)
                     ci[i].set_range(limit[i])
-                    
-
-                pass
-
-
-
 
             manager.process_events(event)
 

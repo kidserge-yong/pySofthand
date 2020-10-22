@@ -12,7 +12,7 @@ def connect_menu(args):
 
     pygame.init()
     surface = pygame.display.set_mode((intro_width, intro_height), pygame.RESIZABLE)
-    pygame.display.set_caption("Option for Carla client.")
+    pygame.display.set_caption("Select the correct serial port for Softhand Robot")
 
     comlist = list_ports.comports()
     serialport = []
