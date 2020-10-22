@@ -18,6 +18,8 @@ def threaded(fn):
         return thread
     return wrapper
 
+from enum import Enum
+
 
 
 class robot():
@@ -37,7 +39,7 @@ class robot():
         self.handle_receive = []
         self.handle_get = []
 
-        if port == None:
+        if not port:
 
             def portlist():
                 comlist = list_ports.comports()
@@ -50,7 +52,7 @@ class robot():
                 if DEBUG:
                     print("You select " + str(comlist[port-1]))
                 return comlist[port-1]
-                
+
             self.openRS485(portlist())
             self.part.append(part(1, "Hand Grip/Open", "softhand", self.ser))
             self.part.append(part(2, "Wrist Flex/Exten", "qbmove",self.ser))
@@ -62,7 +64,7 @@ class robot():
             self.openRS485(port)
 
 
-    def add_part(self, device_id:int = 1, name="", dtype="softhand"):
+    def add_part(self, device_id:int = 1, name:str="", dtype:str="softhand"):
         self.part.append(part(device_id, name, dtype, self.ser))
         self.ser.write(self.part[-1].comActivate(True))
         
@@ -168,6 +170,13 @@ class robot():
 
         self.part[part_num].sendPosStiff(int(relativePosition), int(stiffness))
         return 1
+    
+    def get_part(self, part_num:int):
+        for item in self.part:
+            if item.device_id == part_num:
+                return item
+        print("No part id = %d" % (part_num))
+        return 0
         
 if __name__ == "__main__": 
     pass

@@ -143,5 +143,9 @@ class data_types(Enum):
     TYPE_FLOAT   = 7
     TYPE_DOUBLE  = 8
 
+class qbrobot_type(Enum):
+    SOFTHAND = 0
+    QBMOVE = 1
+
 PARAM_BYTE_SLOT = 50
 PARAM_MENU_SLOT = 150

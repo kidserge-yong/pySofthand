@@ -20,11 +20,6 @@ except ImportError:
     raise RuntimeError('cannot import pygame, make sure pygame package is installed')
 
 try:
-    import serial
-except ImportError:
-    raise RuntimeError('cannot import serial, make sure pyserial package is installed')
-
-try:
     sys.path.append('../module/')
     from qbrobot2 import *
     from menu import *
@@ -117,6 +112,7 @@ class control_interface():
                     if self.slider_bar.value_range[0] <= text_value <= self.slider_bar.value_range[1]:
                         self.slider_bar.set_current_value(text_value)
                         self.status_label.set_text("Set new value")
+                        self.input_function(text_value)
                     else:
                         self.status_label.set_text("Outside value range :" + str(self.slider_bar.value_range))
                 except ValueError:
@@ -125,13 +121,29 @@ class control_interface():
         elif event.user_type == pygame_gui.UI_HORIZONTAL_SLIDER_MOVED:
             if event.ui_element == self.slider_bar:
                 self.text_box.set_text("%.2f" % (event.value))
+                self.input_function(event.value)
                 self.status_label.set_text("Set new value")
 
         elif event.user_type == pygame_gui.UI_BUTTON_PRESSED:
             if event.ui_element == self.reset_button:
                 self.text_box.set_text("%.2f" % (0.0))
                 self.slider_bar.set_current_value(0.0)
+                self.input_function(0.0)
                 self.status_label.set_text("Reset Completed")
+
+    def input_function(self, value):
+        self.function(int(value), 0)
+
+    def set_function(self, function):
+        self.function = function
+
+    def set_range(self, range_limit):
+        self.slider_bar.value_range = range_limit
+        self.min_label.set_text(str(range_limit[0]))
+        self.max_label.set_text(str(range_limit[1]))
+        self.slider_bar.set_current_value(0.0)
+
+
 
 
 # ==============================================================================
@@ -139,21 +151,38 @@ class control_interface():
 # ==============================================================================
 
 def main_loop(args=0):
+    """
+    Softhand handle
+    """
+    softhand = robot(args.port)
+    softhand.add_part(1, "Hand Grip/Open", "softhand")
+    softhand.add_part(2, "Wrist Flex/Exten", "qbmove")
+    softhand.add_part(3, "Wrist Pron/Supi", "qbmove")
+    """
+    gui handle
+    """
     width = 600
-    height = 200
+    height = 600
     BLACK = (0, 0, 0)
     WHITE = (255, 255, 255)
 
     pygame.init()
 
     pygame.display.set_caption('QBRobot controller')
-    surface = pygame.display.set_mode((width, height*3))
-    manager = pygame_gui.UIManager((width, height*3))
+    surface = pygame.display.set_mode((width, height), pygame.RESIZABLE)
+    manager = pygame_gui.UIManager((width, height))
     
     ci = []
+    limit = [
+        (0, 19000),
+        (-5000, 5000),
+        (-5000, 5000)
+    ]
 
     for i in range(3):
-        ci.append(control_interface(surface, manager, pos = (0, height*i)))
+        ci.append(control_interface(surface, manager, pos = (0, height/3*i)))
+        ci[i].set_function(softhand.get_part(i+1).sendPosStiff)
+        ci[i].set_range(limit[i])
 
     clock = pygame.time.Clock()
 
@@ -167,6 +196,18 @@ def main_loop(args=0):
             elif event.type == pygame.USEREVENT:
                 for item in ci:
                     item.interaction(event)
+            elif event.type == pygame.VIDEORESIZE:
+                surface = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+                manager = pygame_gui.UIManager((event.w, event.h))
+                ci = []
+                for i in range(3):
+                    ci.append(control_interface(surface, manager, pos = (0, event.h/3*i)))
+                    ci[i].set_function(softhand.get_part(i+1).sendPosStiff)
+                    ci[i].set_range(limit[i])
+                    
+
+                pass
+
 
 
 
@@ -224,6 +265,8 @@ def main():
 
     args = connect_menu(args)
 
+    print(str(args))
+
     logging.info('listening to device %s on port %s', args.title, args.port)
 
     print(__doc__)
@@ -236,5 +279,5 @@ def main():
 
 
 if __name__ == '__main__':
-    #main()
-    main_loop()
+    main()
+    #main_loop()

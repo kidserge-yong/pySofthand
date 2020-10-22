@@ -28,17 +28,19 @@ class part():
 
     serial_port = None
 
-    MAX_POS = 32767
-    MIN_POS = -32766
-    MAX_CUR = 32767
-    MIN_CUR = -32766
-    MAX_STF = 32767
-    MIN_STF = 0
+    POS_RANGE = (-32766, 32767)
+    CUR_RANGE = (-32766, 32767)
+    STF_RANGE = (0, 32767)
 
     def __init__(self, new_id=1, name="", dtype="softhand",serial=None):
         self.device_id = new_id
         self.device_name = name
         self.device_type = dtype
+
+        if dtype == qbrobot_type.SOFTHAND.name.lower():
+            self.POS_RANGE = (0, 19000)
+        elif dtype == qbrobot_type.QBMOVE.name.lower():
+            self.POS_RANGE = (-32766, 32767)
 
         if serial is None:
             return
@@ -46,6 +48,22 @@ class part():
         self.serial_port = serial
         self.checkConnectivity()
         self.sendSerial(self.comActivate(False))        ## deactivate
+
+    
+    def get_range(self):
+        return [self.POS_RANGE, self.CUR_RANGE, self.STF_RANGE
+        ]
+
+    def set_range(self, range_limit:list = []):
+        if len(range) == 3:
+            self.POS_RANGE = range_limit[0]
+            self.CUR_RANGE = range_limit[1]
+            self.STF_RANGE = range_limit[2]
+            return 1
+        else:
+            print("range_limit in wrong format")
+            return 0
+
         
     def comActivate(self, activate:bool=True):
         command = qbmove_command.CMD_ACTIVATE
@@ -55,7 +73,6 @@ class part():
         else:
             data.append(0)
         return self.comContrustion(command, True, data)
-
         
     def sendPosStiff(self, position=0, stiff=0):
         if self.serial_port.isOpen():
@@ -69,14 +86,14 @@ class part():
         return 0
 
     def setTargetPosition(self, t_position):
-        if t_position > self.MAX_POS or t_position < self.MIN_POS:
+        if t_position > self.POS_RANGE[1] or t_position < self.POS_RANGE[0]:
             print("Device %d: Wrong target position" % self.device_id)
             return
         self.pos_target = t_position
         self.new_pos_target = True
 
     def setTargetCurrent(self, t_current):
-        if t_current > self.MAX_CUR or t_current < self.MIN_CUR:
+        if t_current > self.CUR_RANGE[1] or t_current < self.CUR_RANGE[0]:
             print("Device %d: Wrong target current" % self.device_id)
             return
         self.cur_target = t_current
@@ -102,9 +119,9 @@ class part():
         return(com)
 
     def comSetPosition(self, position):
-        if position > self.MAX_POS or position < self.MIN_POS:
-            print("Position should be between " + str(self.MAX_POS) +
-                  " to " + str(self.MIN_POS) + " (2 bytes with signed)")
+        if position > self.POS_RANGE[1] or position < self.POS_RANGE[0]:
+            print("Position should be between " + str(self.POS_RANGE[1]) +
+                  " to " + str(self.POS_RANGE[0]) + " (2 bytes with signed)")
             return
 
         command = qbmove_command.CMD_SET_INPUTS
@@ -116,13 +133,13 @@ class part():
         return self.comContrustion(command, True, data)
 
     def comSetPosStiff(self, position, stiff):
-        if position > self.MAX_POS or position < self.MIN_POS:
-            print("Position should be between " + str(self.MAX_POS) +
-                  " to " + str(self.MIN_POS) + " (2 bytes with signed)")
+        if position > self.POS_RANGE[1] or position < self.POS_RANGE[0]:
+            print("Position should be between " + str(self.POS_RANGE[1]) +
+                  " to " + str(self.POS_RANGE[0]) + " (2 bytes with signed)")
             return
-        if stiff > self.MAX_STF or stiff < self.MIN_STF:
-            print("Stiffness should be between" + str(self.MAX_STF) +
-                  " to " + str(self.MIN_STF) + " (2 bytes with signed)")
+        if stiff > self.STF_RANGE[1] or stiff < self.STF_RANGE[0]:
+            print("Stiffness should be between" + str(self.STF_RANGE[1]) +
+                  " to " + str(self.STF_RANGE[0]) + " (2 bytes with signed)")
             return
 
         command = qbmove_command.CMD_SET_POS_STIFF
