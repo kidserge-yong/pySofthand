@@ -171,12 +171,12 @@ class robot():
         self.part[part_num].sendPosStiff(int(relativePosition), int(stiffness))
         return 1
     
-    def get_part(self, part_num:int):
+    def get_part(self, part_id:int):
         for item in self.part:
-            if item.device_id == part_num:
+            if item.device_id == part_id:
                 return item
-        print("No part id = %d" % (part_num))
-        return 0
+        print("No part id = %d" % (part_id))
+        return None
         
 if __name__ == "__main__": 
     pass

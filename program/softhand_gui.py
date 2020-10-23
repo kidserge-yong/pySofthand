@@ -21,7 +21,7 @@ except ImportError:
 
 try:
     sys.path.append('../module/')
-    from qbrobot2 import *
+    from qbrobot import *
     from menu import *
 except ImportError:
     raise RuntimeError('cannot import module, make sure sys.path is correct')
@@ -171,6 +171,9 @@ def main_loop(args=0):
     pygame.display.set_caption('QBRobot controller')
     surface = pygame.display.set_mode((width, height), pygame.RESIZABLE)
     manager = pygame_gui.UIManager((width, height), 'theme.json')
+
+    background = pygame.Surface((800, 600))
+    background.fill(pygame.Color('#25292e'))
     
     ci = []
     limit = [
@@ -209,9 +212,8 @@ def main_loop(args=0):
 
         manager.update(time_delta)
 
-        
+        surface.blit(background, (0, 0))
         manager.draw_ui(surface)
-
         pygame.display.update()
 
     # try:

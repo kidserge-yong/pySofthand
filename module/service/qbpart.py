@@ -33,6 +33,9 @@ class part():
     STF_RANGE = (0, 32767)
 
     def __init__(self, new_id=1, name="", dtype="softhand",serial=None):
+        if serial is None:
+            return
+        
         self.device_id = new_id
         self.device_name = name
         self.device_type = dtype
@@ -42,11 +45,10 @@ class part():
         elif dtype == qbrobot_type.QBMOVE.name.lower():
             self.POS_RANGE = (-32766, 32767)
 
-        if serial is None:
-            return
-
         self.serial_port = serial
-        self.checkConnectivity()
+        self.is_connect = self.checkConnectivity()
+        if self.is_connect is False:
+            return
         self.sendSerial(self.comActivate(False))        ## deactivate
 
     
@@ -285,9 +287,9 @@ class part():
             print("check is %s" % check)
 
         if check != com:
-            print("Connection test fail, please check the serial port connectivity. Drop serial port")
-            self.serial_port = None
-            return
+            print("Connection test fail, please check the serial port connectivity.")
+            #self.serial_port = None
+            return False
         
         print("Connection confirm with return: %s" % (com))
 
@@ -305,6 +307,7 @@ class part():
             print("Position: %s \nCurrent: %s" % (self.pos, self.cur))
         
         self.pos_offset = self.pos[1]
+        return True
         
         
         while self.cur == 0:
