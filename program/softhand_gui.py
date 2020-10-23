@@ -172,14 +172,14 @@ def main_loop(args=0):
     surface = pygame.display.set_mode((width, height), pygame.RESIZABLE)
     manager = pygame_gui.UIManager((width, height), 'theme.json')
 
-    background = pygame.Surface((800, 600))
+    background = pygame.Surface((width, height))
     background.fill(pygame.Color('#25292e'))
     
     ci = []
     limit = [
         (0, 19000),
-        (-5000, 5000),
-        (-5000, 5000)
+        (-10000, 10000),
+        (-10000, 10000)
     ]
 
     for i in range(3):
@@ -200,6 +200,8 @@ def main_loop(args=0):
                 for item in ci:
                     item.interaction(event)
             elif event.type == pygame.VIDEORESIZE:
+                background = pygame.Surface((event.w, event.h))
+                background.fill(pygame.Color('#25292e'))
                 surface = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
                 manager = pygame_gui.UIManager((event.w, event.h), 'theme.json')
                 ci = []
