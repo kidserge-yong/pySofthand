@@ -7,7 +7,7 @@ import time
 DEBUG = False
 
 
-class part():
+class device():
     device_id = 1
     device_name = ""
     device_type = "softhand"    # {softhand, qbmove}
@@ -33,7 +33,7 @@ class part():
     STF_RANGE = (0, 32767)
     MINIMAL_CHANGES = 100
 
-    def __init__(self, new_id=1, name="", dtype="softhand", serial=None, buffer = None):
+    def __init__(self, new_id:int=1, name:str="", dtype:str="softhand", serial=None, buffer:list = None):
         if serial is None:
             return
 
@@ -42,6 +42,8 @@ class part():
         self.device_id = new_id
         self.device_name = name
         self.device_type = dtype
+
+        #print(type(new_id))
 
         if dtype == qbrobot_type.SOFTHAND.name.lower():
             self.POS_RANGE = (0, 19000)
@@ -223,7 +225,7 @@ class part():
             #self.buffer.append(data)
         else:
             if DEBUG:
-                print("serial port donot connect with part ID:%d" %
+                print("serial port donot connect with device ID:%d" %
                       (self.device_id))
 
     def checksum(self, data_buffer, data_length=0):
@@ -243,7 +245,7 @@ class part():
         return int.from_bytes(data_bytes, byteorder='little', signed=True)
 
     def checkConnectivity(self):
-        print("Test Connection of qbrobot:part%d. Send ping command" %
+        print("Test Connection of qbrobot:device%d. Send ping command" %
               (self.device_id))
         com = self.comPing()
 
@@ -306,7 +308,7 @@ class part():
         
         self.cur_offset = self.cur
 
-        print("Finish test for connectivity of qbrobot:part%d." %
+        print("Finish test for connectivity of qbrobot:device%d." %
               (self.device_id))
 
     def updateData(self, data):
@@ -331,7 +333,8 @@ class part():
                 if 128 <= data[2] <= 146:
                     command = qbmove_command(data[2])  # data type
                 else:
-                    print(data[2])
+                    if DEBUG:
+                        print(data[2])
                     return
                 if command == qbmove_command.CMD_GET_MEASUREMENTS:
                     self.pos = value
