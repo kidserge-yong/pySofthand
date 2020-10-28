@@ -2,7 +2,7 @@ import serial
 import serial.rs485 as rs485
 from service.qbcommand import *
 from serial.tools import list_ports
-from service.qbpart import part
+from service.qbdevice import device
 import time, sys
 
 from service.repeatedTimer import RepeatedTimer
@@ -21,7 +21,7 @@ class robot(threading.Thread):
         self.is_update_request = True
         self.new_data = False
 
-        self.parts = []
+        self.devices = []
         self.command_buf = []
 
         self.serial_port = serial.Serial()
@@ -34,12 +34,26 @@ class robot(threading.Thread):
         self._stop = threading.Event() 
     
     def stop(self): 
+        """
+        generic function for thread object
+        """
         self._stop.set()
 
     def stopped(self): 
+        """
+        generic function for thread object
+        """
         return self._stop.isSet() 
   
     def run(self): 
+        """
+        Main loop that process at maximum 100Hz,
+        Task:
+        ask position current and stiffness from all device within the robot.
+        process return answer from each device and give data to appropriate device.
+        update and send data though LSL.
+        check command buffer and send all data within command buffer to robot.
+        """
         print("start mainloop")
         while True:
             time.sleep(0.01)
@@ -67,6 +81,9 @@ class robot(threading.Thread):
                     self.serial_port.write(command)
 
     def __del__(self):
+        """
+        deconstrutor to take care of lsl and serial port and ensure it correctly closed.
+        """
         print("start deconstrutor")
         self.is_start = False
         if self.is_lsl:
@@ -75,7 +92,11 @@ class robot(threading.Thread):
             self.serial_port.close()
         
     def connect_serial(self, serial_port:serial.tools.list_ports_common.ListPortInfo):
-        if type(serial_port) is not serial.tools.list_ports_common.ListPortInfo:
+        """
+        function taking care of connect robot with serial port.
+        serial_port: element of list_ports.comports(), see pyserial for further information
+        """
+        if serial_port is None:
             print("serial_port type is wrong, initial manual serial port selection.")
 
             while serial_port is None:
@@ -93,25 +114,37 @@ class robot(threading.Thread):
 
 
             self.openRS485(serial_port)
-            self.parts.append(part(1, "Hand Grip/Open", "softhand", self.serial_port, self.command_buf))
-            self.parts.append(part(2, "Wrist Flex/Exten", "qbmove", self.serial_port, self.command_buf))
-            self.parts.append(part(3, "Wrist Pron/Supi", "qbmove", self.serial_port, self.command_buf))
+            #self.add_device(1, "Hand Grip/Open", "softhand")
+            #self.add_device(2, "Wrist Flex/Exten", "qbmove")
+            #self.add_device(3, "Wrist Pron/Supi", "qbmove")
 
-            for item in self.parts:
+            for item in self.devices:
                 self.command_buf.append(item.comActivate(True))
-        else:
+        elif type(serial_port) is serial.tools.list_ports_common.ListPortInfo:
             self.openRS485(serial_port)
+        else:
+            pass
 
-    def add_part(self, device_id:int = 1, name:str="", dtype:str="softhand"):
-        self.parts.append(part(device_id, name, dtype, self.serial_port, self.command_buf))
-        self.command_buf.append(self.parts[-1].comActivate(True))
+    def add_device(self, device_id:int = 1, name:str="", dtype:str="softhand"):
+        """
+
+
+        """
+        if self.serial_port is None:
+            print("Please connect robot to serial port first to confirm the connectivity")
+            return
+        if self.command_buf is None:
+            print("Warning, command buffer do not initialize")
+
+        self.devices.append(device(device_id, name, dtype, self.serial_port, self.command_buf))
+        self.command_buf.append(self.devices[-1].comActivate(True))
         if self.is_lsl:
-            print("Each part need to reconfigurate lsl.")
+            print("Each device need to reconfigurate lsl.")
             self.stop_lsl()
 
     def start_lsl(self):
-        self.pos_outlet = StreamOutlet(StreamInfo('Softhand Position Data', 'Position', 3 * len(self.parts), 100, 'int16', 'myshpos20191002'))
-        self.cur_outlet = StreamOutlet(StreamInfo('Softhand Current Data', 'Current', 2 * len(self.parts), 100, 'int16', 'myshcur20191002'))
+        self.pos_outlet = StreamOutlet(StreamInfo('Softhand Position Data', 'Position', 3 * len(self.devices), 100, 'int16', 'myshpos20191002'))
+        self.cur_outlet = StreamOutlet(StreamInfo('Softhand Current Data', 'Current', 2 * len(self.devices), 100, 'int16', 'myshcur20191002'))
         self.is_lsl = True
 
     def stop_lsl(self):
@@ -122,33 +155,33 @@ class robot(threading.Thread):
     def update_lsl(self):
         if self.is_lsl:
             value = []
-            for part_i in self.parts:
-                if part_i.pos is not None:
-                    value = value + part_i.pos
-            if len(value) == (3 * len(self.parts)):
+            for device_i in self.devices:
+                if device_i.pos is not None:
+                    value = value + device_i.pos
+            if len(value) == (3 * len(self.devices)):
                 self.pos_outlet.push_sample(value)
             value = []
-            for part_i in self.parts:
-                if part_i.cur is not None:
-                    value = value + part_i.cur
-            if len(value) == (2 * len(self.parts)):
+            for device_i in self.devices:
+                if device_i.cur is not None:
+                    value = value + device_i.cur
+            if len(value) == (2 * len(self.devices)):
                 self.cur_outlet.push_sample(value)
 
     def update_data(self, data_in):
         datas = data_in.split(str.encode(':'))
         for data in datas:
             if len(data) > 0:
-                for part_i in self.parts:
-                    if part_i.checkDeviceID(data[0]):
-                        part_i.updateData(data)
+                for device_i in self.devices:
+                    if device_i.checkDeviceID(data[0]):
+                        device_i.updateData(data)
         self.new_data = True
 
             
     def send_request(self):
         if self.is_start == True:
-            for part_i in self.parts:
-                self.command_buf.append(part_i.comGetMeasurement())
-                self.command_buf.append(part_i.comGetCurrent())
+            for device_i in self.devices:
+                self.command_buf.append(device_i.comGetMeasurement())
+                self.command_buf.append(device_i.comGetCurrent())
         else:
             print("Stop send request")
             return
@@ -158,28 +191,58 @@ class robot(threading.Thread):
         self.serial_port.rs485_mode = rs485.RS485Settings()
         return 1
 
-    def movePart(self, part_num:int, position:int = 0, percentStiffness:int = 0):
+    def movedevice(self, device_num:int, position:int = 0, percentStiffness:int = 0):
         """
-        move part according to part number: keep for compatibility, will be removed in future
-        part_num: int, index of robot part
+        move device according to device number: keep for compatibility, will be removed in future
+        device_num: int, index of robot device
         position: int, position in integer
         percentStiffness: stiffness in 0 to 100
         """
+        if not 0 <= device_num < len(self.devices):
+            print("device_num outside device in robot between 0 and %d" % (len(self.devices)))
+            return 0
+        if not self.devices[device_num].POS_RANGE[0] <= position <= self.devices[device_num].POS_RANGE[1]:
+            print("position outside the device range between %d and %d" % (self.devices[device_num].POS_RANGE))
+            return 0
+        if not 0 <= percentStiffness <= 100:
+            print("percentStiffness is between 0 and 100")
+            return 0
 
-        relativePosition = position + self.parts[part_num].pos_offset
+        stiffrange = self.devices[device_num].STF_RANGE[1] - self.devices[device_num].STF_RANGE[0]
+        stiffness = ((percentStiffness / 100) *  stiffrange) + self.devices[device_num].STF_RANGE[0]
 
-        stiffrange = self.parts[part_num].MAX_STF - self.parts[part_num].MIN_STF
-        stiffness = ((percentStiffness / 100) *  stiffrange) + self.parts[part_num].MIN_STF
-
-        self.parts[part_num].sendPosStiff(int(relativePosition), int(stiffness))
+        self.devices[device_num].sendPosStiff(int(position), int(stiffness))
         return 1
     
-    def get_part(self, part_id:int):
-        for item in self.parts:
-            if item.device_id == part_id:
+    def get_device(self, device_id:int):
+        """
+        get the device for outside controller, use with care.
+        device_id: id of the device you want to control.
+        """
+        for item in self.devices:
+            if item.device_id == device_id:
                 return item
-        print("No part id = %d" % (part_id))
+        print("No device id = %d" % (device_id))
         return None
         
 if __name__ == "__main__": 
-    pass
+    softhand = robot()
+    softhand.add_device(1, "Hand Grip/Open", "softhand")
+    softhand.add_device(2, "Wrist Flex/Exten", "qbmove")
+    softhand.add_device(3, "Wrist Pron/Supi", "qbmove")
+    softhand.start()
+    softhand.start_lsl()
+    try:
+        while(True):
+            try:
+                print("Control part")
+                device_id = int(input("input device id: "))
+                position = int(input("input position: "))
+                stiffness = int(input("input stiffness: "))
+            except ValueError:
+                pass
+            softhand.movedevice(device_id, position, stiffness)
+    except KeyboardInterrupt:
+        pass
+
+    softhand.stop()
