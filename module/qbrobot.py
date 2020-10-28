@@ -127,8 +127,10 @@ class robot(threading.Thread):
 
     def add_device(self, device_id:int = 1, name:str="", dtype:str="softhand"):
         """
-
-
+        add device according to device_id
+        device_id:int, device_id future check communication model before create device will be implement.
+        name:str, just a name of device.
+        dtype:str, type of device following service.qbcommand.qbrobot_type enum.
         """
         if self.serial_port is None:
             print("Please connect robot to serial port first to confirm the connectivity")
@@ -141,18 +143,28 @@ class robot(threading.Thread):
         if self.is_lsl:
             print("Each device need to reconfigurate lsl.")
             self.stop_lsl()
+            self.start_lsl()
 
     def start_lsl(self):
+        """
+        initial lsl communication and allow data to send according to number of device in the robot
+        """
         self.pos_outlet = StreamOutlet(StreamInfo('Softhand Position Data', 'Position', 3 * len(self.devices), 100, 'int16', 'myshpos20191002'))
         self.cur_outlet = StreamOutlet(StreamInfo('Softhand Current Data', 'Current', 2 * len(self.devices), 100, 'int16', 'myshcur20191002'))
         self.is_lsl = True
 
     def stop_lsl(self):
+        """
+        recycle lsl communication
+        """
         self.pos_outlet = None
         self.cur_outlet = None
         self.is_lsl = False
 
     def update_lsl(self):
+        """
+        send new data from each devices though lsl communication.
+        """
         if self.is_lsl:
             value = []
             for device_i in self.devices:
@@ -167,7 +179,11 @@ class robot(threading.Thread):
             if len(value) == (2 * len(self.devices)):
                 self.cur_outlet.push_sample(value)
 
-    def update_data(self, data_in):
+    def update_data(self, data_in:bytes):
+        """
+        send binary data for update each devices.
+        data_in: bytes, bytes data that separate by "::"
+        """
         datas = data_in.split(str.encode(':'))
         for data in datas:
             if len(data) > 0:
@@ -178,6 +194,9 @@ class robot(threading.Thread):
 
             
     def send_request(self):
+        """
+        add request data for each device in robot.
+        """
         if self.is_start == True:
             for device_i in self.devices:
                 self.command_buf.append(device_i.comGetMeasurement())
@@ -187,6 +206,10 @@ class robot(threading.Thread):
             return
 
     def openRS485(self, port):
+        """
+        open serial port to robot and also configurate the communication protocol according to RS485
+        port: serial_port
+        """
         self.serial_port = serial.Serial(port.device,BAUD_RATE,timeout=1)
         self.serial_port.rs485_mode = rs485.RS485Settings()
         return 1
