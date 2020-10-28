@@ -155,9 +155,9 @@ def main_loop(args=0):
     Softhand handle
     """
     softhand = robot(args.port)
-    softhand.add_part(1, "Hand Grip/Open", "softhand")
-    softhand.add_part(2, "Wrist Flex/Exten", "qbmove")
-    softhand.add_part(3, "Wrist Pron/Supi", "qbmove")
+    softhand.add_device(1, "Hand Grip/Open", "softhand")
+    softhand.add_device(2, "Wrist Flex/Exten", "qbmove")
+    softhand.add_device(3, "Wrist Pron/Supi", "qbmove")
     softhand.start()
     softhand.start_lsl()
     """
@@ -186,7 +186,7 @@ def main_loop(args=0):
 
     for i in range(3):
         ci.append(control_interface(surface, manager, pos = (0, height/3*i)))
-        ci[i].set_function(softhand.get_part(i+1).sendPosStiff)
+        ci[i].set_function(softhand.get_device(i+1).sendPosStiff)
         ci[i].set_range(limit[i])
 
     clock = pygame.time.Clock()
@@ -209,7 +209,7 @@ def main_loop(args=0):
                 ci = []
                 for i in range(3):
                     ci.append(control_interface(surface, manager, pos = (0, event.h/3*i)))
-                    ci[i].set_function(softhand.get_part(i+1).sendPosStiff)
+                    ci[i].set_function(softhand.get_device(i+1).sendPosStiff)
                     ci[i].set_range(limit[i])
 
             manager.process_events(event)
