@@ -158,6 +158,8 @@ def main_loop(args=0):
     softhand.add_part(1, "Hand Grip/Open", "softhand")
     softhand.add_part(2, "Wrist Flex/Exten", "qbmove")
     softhand.add_part(3, "Wrist Pron/Supi", "qbmove")
+    softhand.start()
+    softhand.start_lsl()
     """
     gui handle
     """
@@ -192,7 +194,7 @@ def main_loop(args=0):
     is_running = True
 
     while is_running:
-        time_delta = clock.tick(60)/1000.0
+        time_delta = clock.tick(30)/1000.0
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 is_running = False
@@ -217,6 +219,8 @@ def main_loop(args=0):
         surface.blit(background, (0, 0))
         manager.draw_ui(surface)
         pygame.display.update()
+
+    softhand.stop()
 
     # try:
     #     print(args)

@@ -17,24 +17,27 @@ class part():
     new_pos_target = False
     new_cur_target = False
 
-    pos_target = 0
-    cur_target = 0
-    pos = 0
-    cur = 0
-    stf = 0
-    pos_offset = 0
-    cur_offset = 0
-    stf_offset = 0
+    pos_target = None
+    cur_target = None
+    pos = None
+    cur = None
+    stf = None
+    pos_offset = None
+    cur_offset = None
+    stf_offset = None
 
     serial_port = None
 
     POS_RANGE = (-32766, 32767)
     CUR_RANGE = (-32766, 32767)
     STF_RANGE = (0, 32767)
+    MINIMAL_CHANGES = 100
 
-    def __init__(self, new_id=1, name="", dtype="softhand",serial=None):
+    def __init__(self, new_id=1, name="", dtype="softhand", serial=None, buffer = None):
         if serial is None:
             return
+
+        self.buffer = buffer
         
         self.device_id = new_id
         self.device_name = name
@@ -50,11 +53,11 @@ class part():
         if self.is_connect is False:
             return
         self.sendSerial(self.comActivate(False))        ## deactivate
-
+        self.pos_target = 0
+        self.cur_target = 0
     
     def get_range(self):
-        return [self.POS_RANGE, self.CUR_RANGE, self.STF_RANGE
-        ]
+        return [self.POS_RANGE, self.CUR_RANGE, self.STF_RANGE]
 
     def set_range(self, range_limit:list = []):
         if len(range) == 3:
@@ -77,16 +80,24 @@ class part():
         return self.comContrustion(command, True, data)
         
     def sendPosStiff(self, position=0, stiff=0):
-        if self.serial_port.isOpen():
+        if not self.POS_RANGE[0] <= position <= self.POS_RANGE[1]:
+            print("Device %d: Wrong target position at position %d" % (self.device_id, position))
+            return 0
+        if self.serial_port.isOpen() is False:
+            return 0
+
+        if abs(position - self.pos[0]) > self.MINIMAL_CHANGES:
+            self.pos_target = position
             if self.device_type is "softhand":
                 command = self.comSetPosition(position)
-                self.serial_port.write(command)
+                self.buffer.append(command)
             elif self.device_type is "qbmove":
                 command = self.comSetPosStiff(position, stiff)
-                self.serial_port.write(command)
+                self.buffer.append(command)
             return command
-        return 0
-
+        else:
+            return 0
+    
     def setTargetPosition(self, t_position):
         if t_position > self.POS_RANGE[1] or t_position < self.POS_RANGE[0]:
             print("Device %d: Wrong target position" % self.device_id)
@@ -162,44 +173,7 @@ class part():
         data.append(repetitions.to_bytes(2, byteorder='little')[0])
         return self.comContrustion(command, True, data)
 
-    def updateData(self, data):
-        # data = data[2:]
-        data = data.replace(str.encode(':'),b'')
-        # print(data)
-        if len(data) > 3:
-
-            if data[0] != self.device_id:
-                return
-
-            if self.byte2int(self.checksum(data[2:])) == 0:  # checksum
-                value = []
-                data_value = data[3:-1]
-                info = [data_value[i:i+2]
-                        for i in range(0, len(data_value), 2)]
-                for i in info:
-                    value.append(int.from_bytes(
-                        i, byteorder='big', signed=True))
-                # for i,k in zip(data[3:-1:2], data[4:-1:2]):
-                #     value.append((i * 256) + k)
-                if 128 <= data[2] <= 146:
-                    command = qbmove_command(data[2])  # data type
-                else:
-                    print(data[2])
-                    return
-                if command == qbmove_command.CMD_GET_MEASUREMENTS:
-                    self.pos = value
-                    self.new_pos = True
-                elif command == qbmove_command.CMD_GET_CURRENTS:
-                    self.cur = value
-                    self.new_cur = True
-            else:
-                if DEBUG:
-                    print(self.checksum(data[2:]))
-
-    def __str__(self):
-        return "ID: %d\nPosition: %d\Current: %d" % (self.device_id, self.pos, self.cur)
-
-    def getinfo(self):
+    def cominfo(self):
         c1 = str.encode('?')
         c2 = bytes([13])
         c3 = bytes([10])
@@ -246,6 +220,7 @@ class part():
     def sendSerial(self, data):
         if self.serial_port is not None:
             self.serial_port.write(data)
+            #self.buffer.append(data)
         else:
             if DEBUG:
                 print("serial port donot connect with part ID:%d" %
@@ -289,11 +264,19 @@ class part():
         if check != com:
             print("Connection test fail, please check the serial port connectivity.")
             #self.serial_port = None
+            pos_target = [0, 0, 0]
+            cur_target = [0, 0]
+            pos = [0, 0, 0]
+            cur = [0, 0]
+            stf = [0, 0]
+            pos_offset = [0, 0, 0]
+            cur_offset = [0, 0]
+            stf_offset = [0, 0]
             return False
         
         print("Connection confirm with return: %s" % (com))
 
-        while self.pos == 0:
+        while self.pos is None:
             print("Start receive first data")
             self.serial_port.read_all()  # Delete all data in buffer
             self.sendSerial(self.comGetMeasurement())
@@ -307,10 +290,8 @@ class part():
             print("Position: %s \nCurrent: %s" % (self.pos, self.cur))
         
         self.pos_offset = self.pos[1]
-        return True
         
-        
-        while self.cur == 0:
+        while self.cur is None:
             self.serial_port.read_all()  # Delete all data in buffer
             self.sendSerial(self.comGetCurrent())
             
@@ -327,3 +308,40 @@ class part():
 
         print("Finish test for connectivity of qbrobot:part%d." %
               (self.device_id))
+
+    def updateData(self, data):
+        # data = data[2:]
+        data = data.replace(str.encode(':'),b'')
+        # print(data)
+        if len(data) > 3:
+
+            if data[0] != self.device_id:
+                return
+
+            if self.byte2int(self.checksum(data[2:])) == 0:  # checksum
+                value = []
+                data_value = data[3:-1]
+                info = [data_value[i:i+2]
+                        for i in range(0, len(data_value), 2)]
+                for i in info:
+                    value.append(int.from_bytes(
+                        i, byteorder='big', signed=True))
+                # for i,k in zip(data[3:-1:2], data[4:-1:2]):
+                #     value.append((i * 256) + k)
+                if 128 <= data[2] <= 146:
+                    command = qbmove_command(data[2])  # data type
+                else:
+                    print(data[2])
+                    return
+                if command == qbmove_command.CMD_GET_MEASUREMENTS:
+                    self.pos = value
+                    self.new_pos = True
+                elif command == qbmove_command.CMD_GET_CURRENTS:
+                    self.cur = value
+                    self.new_cur = True
+            else:
+                if DEBUG:
+                    print(self.checksum(data[2:]))
+
+    def __str__(self):
+        return "ID: %d\nPosition: %d\Current: %d" % (self.device_id, self.pos, self.cur)
