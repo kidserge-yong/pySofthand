@@ -5,7 +5,6 @@ from serial.tools import list_ports
 from service.qbdevice import device
 import time, sys
 
-from service.repeatedTimer import RepeatedTimer
 import threading
 from pylsl import StreamInfo, StreamOutlet
 
