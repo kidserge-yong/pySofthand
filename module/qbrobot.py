@@ -68,14 +68,15 @@ class robot(threading.Thread):
             if not self.is_start:
                 return
             if not self.serial_port.isOpen():
+                print("serial_port is not connect to robot.")
                 return
 
             if self.is_update_request:
-                self.send_request()
+                self.__send_request()
 
             data_in = self.serial_port.read_all()
             if len(data_in) > 0:
-                self.update_data(data_in)
+                self.__update_data(data_in)
 
             if self.is_new_data:
                 self.update_lsl()
@@ -106,7 +107,7 @@ class robot(threading.Thread):
         serial_port: element of list_ports.comports(), see pyserial for further information
         """
         if serial_port is None:
-            print("serial_port type is wrong, initial manual serial port selection.")
+            print("serial_port is not correct, initial manual serial port selection.")
 
             while serial_port is None:
                 comlist = list_ports.comports()
@@ -128,7 +129,7 @@ class robot(threading.Thread):
             #self.add_device(3, "Wrist Pron/Supi", "qbmove")
 
             for item in self.devices:
-                self.command_buf.append(item.comActivate(True))
+                item.activate()
         elif type(serial_port) is serial.tools.list_ports_common.ListPortInfo:
             self.openRS485(serial_port)
         else:
@@ -150,8 +151,9 @@ class robot(threading.Thread):
         if self.command_buf is None:
             print("Warning, command buffer do not initialize")
 
-        self.devices.append(device(device_id, name, dtype, self.serial_port, self.command_buf))
-        self.command_buf.append(self.devices[-1].comActivate(True))
+        new_device = device(device_id, name, dtype, self.serial_port, self.command_buf)
+        new_device.activate()
+        self.devices.append(new_device)
         if self.is_lsl:
             print("Each device need to reconfigurate lsl.")
             self.stop_lsl()
@@ -191,9 +193,9 @@ class robot(threading.Thread):
             if len(value) == (2 * len(self.devices)):
                 self.cur_outlet.push_sample(value)
 
-    def update_data(self, data_in:bytes):
+    def __update_data(self, data_in:bytes):
         """
-        send binary data for update each devices.
+        Private function for send binary data for update each devices.
         data_in: bytes, bytes data that separate by "::"
         """
         datas = data_in.split(str.encode(':'))
@@ -205,14 +207,14 @@ class robot(threading.Thread):
         self.is_new_data = True
 
             
-    def send_request(self):
+    def __send_request(self):
         """
-        add request data for each device in robot.
+        Private function for add request data for each device in robot.
         """
         if self.is_start == True:
             for device_i in self.devices:
-                self.command_buf.append(device_i.comGetMeasurement())
-                self.command_buf.append(device_i.comGetCurrent())
+                device_i.getPosition()
+                device_i.getCurrent()
         else:
             print("Stop send request")
             return
@@ -222,7 +224,7 @@ class robot(threading.Thread):
         open serial port to robot and also configurate the communication protocol according to RS485
         port: serial_port
         """
-        self.serial_port = serial.Serial(port.device,BAUD_RATE,timeout=1)
+        self.serial_port = serial.Serial(port.device, BAUD_RATE, timeout=1)
         self.serial_port.rs485_mode = rs485.RS485Settings()
         return 1
 
@@ -274,10 +276,11 @@ if __name__ == "__main__":
                 device_id = int(input("input device id: "))
                 position = int(input("input position: "))
                 stiffness = int(input("input stiffness: "))
+                softhand.movedevice(device_id, position, stiffness)
             except ValueError:
                 pass
-            softhand.movedevice(device_id, position, stiffness)
     except KeyboardInterrupt:
         pass
 
     softhand.stop()
+    del softhand
