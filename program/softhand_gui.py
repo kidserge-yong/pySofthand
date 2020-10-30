@@ -267,7 +267,7 @@ def main():
 
     args = connect_menu(args)
 
-    print(str(args))
+    #print(str(args))
 
     logging.info('listening to device %s on port %s', args.title, args.port)
 

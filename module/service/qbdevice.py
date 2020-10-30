@@ -43,8 +43,6 @@ class device():
         self.device_name = name
         self.device_type = dtype
 
-        #print(type(new_id))
-
         if dtype == qbrobot_type.SOFTHAND.name.lower():
             self.POS_RANGE = (0, 19000)
         elif dtype == qbrobot_type.QBMOVE.name.lower():

@@ -15,15 +15,18 @@ from enum import Enum
 
 class robot(threading.Thread):
 
+    is_start = False
+    is_lsl = False
+    is_update_request = False
+    is_new_data = False
+
+    devices = []
+    command_buf = []
+
+    pos_outlet = None
+    cur_outlet = None
+
     def __init__(self, serial_port = None, *args, **kwargs):
-        self.is_start = True
-        self.is_lsl = False
-        self.is_update_request = True
-        self.new_data = False
-
-        self.devices = []
-        self.command_buf = []
-
         self.serial_port = serial.Serial()
         self.pos_outlet = None
         self.cur_outlet = None
@@ -45,21 +48,26 @@ class robot(threading.Thread):
         """
         return self._stop.isSet() 
   
-    def run(self): 
+    def run(self, sleep_interval:float = 0.01): 
         """
         Main loop that process at maximum 100Hz,
+        sleep_interval: Because we use separate thread to parallel control qbrobot without block the process, this value also affect sampling frequency of the data
         Task:
         ask position current and stiffness from all device within the robot.
         process return answer from each device and give data to appropriate device.
         update and send data though LSL.
         check command buffer and send all data within command buffer to robot.
         """
+        self.is_start = True
+        self.is_update_request = True
         print("start mainloop")
         while True:
-            time.sleep(0.01)
+            time.sleep(sleep_interval)
             if self.stopped(): 
                 return
-            if not self.serial_port.isOpen() or not self.is_start:
+            if not self.is_start:
+                return
+            if not self.serial_port.isOpen():
                 return
 
             if self.is_update_request:
@@ -69,9 +77,9 @@ class robot(threading.Thread):
             if len(data_in) > 0:
                 self.update_data(data_in)
 
-            if self.new_data:
+            if self.is_new_data:
                 self.update_lsl()
-                self.new_data = False
+                self.is_new_data = False
             
             #print("in mainloop")
             com_len = len(self.command_buf)
@@ -84,7 +92,8 @@ class robot(threading.Thread):
         """
         deconstrutor to take care of lsl and serial port and ensure it correctly closed.
         """
-        print("start deconstrutor")
+        if DEBUG:
+            print("start deconstrutor")
         self.is_start = False
         if self.is_lsl:
             self.stop_lsl()
@@ -132,6 +141,9 @@ class robot(threading.Thread):
         name:str, just a name of device.
         dtype:str, type of device following service.qbcommand.qbrobot_type enum.
         """
+        if self.is_update_request:
+            print("Please add all device before start robot, stop, del and recreate robot")
+            return
         if self.serial_port is None:
             print("Please connect robot to serial port first to confirm the connectivity")
             return
@@ -190,7 +202,7 @@ class robot(threading.Thread):
                 for device_i in self.devices:
                     if device_i.checkDeviceID(data[0]):
                         device_i.updateData(data)
-        self.new_data = True
+        self.is_new_data = True
 
             
     def send_request(self):
