@@ -13,7 +13,15 @@ DEBUG = False
 
 from enum import Enum
 
-class robot(threading.Thread):
+def threaded(fn):
+    def wrapper(*args, **kwargs):
+        thread = threading.Thread(target=fn, args=args, kwargs=kwargs)
+        thread.start()
+        return thread
+    return wrapper
+
+
+class robot():
 
     is_start = False
     is_lsl = False
@@ -35,20 +43,19 @@ class robot(threading.Thread):
 
         super(robot, self).__init__(*args, **kwargs) 
         self._stop = threading.Event() 
-    
-    def stop(self): 
-        """
-        generic function for thread object
-        """
-        self._stop.set()
 
-    def stopped(self): 
-        """
-        generic function for thread object
-        """
-        return self._stop.isSet() 
-  
-    def run(self, sleep_interval:float = 0.01): 
+    def start(self):
+        self.is_start = True
+        self.is_update_request = True
+        self.mainloop = self.mainloop()
+
+    def stop(self):
+        self.is_start = False
+        self.is_update_request = False
+        del self.mainloop
+
+    @threaded
+    def mainloop(self, sleep_interval:float = 0.01): 
         """
         Main loop that process at maximum 100Hz,
         sleep_interval: Because we use separate thread to parallel control qbrobot without block the process, this value also affect sampling frequency of the data
@@ -58,27 +65,24 @@ class robot(threading.Thread):
         update and send data though LSL.
         check command buffer and send all data within command buffer to robot.
         """
-        self.is_start = True
-        self.is_update_request = True
+        
         print("start mainloop")
         while True:
             time.sleep(sleep_interval)
-            if self.stopped(): 
-                return
             if not self.is_start:
                 return
             if not self.serial_port.isOpen():
                 print("serial_port is not connect to robot.")
                 return
 
-            if self.is_update_request:
+            if self.is_update_request is True:
                 self.__send_request()
 
             data_in = self.serial_port.read_all()
             if len(data_in) > 0:
                 self.__update_data(data_in)
 
-            if self.is_new_data:
+            if self.is_new_data is True:
                 self.update_lsl()
                 self.is_new_data = False
             
@@ -95,8 +99,9 @@ class robot(threading.Thread):
         """
         if DEBUG:
             print("start deconstrutor")
-        self.is_start = False
-        if self.is_lsl:
+        if self.is_start is True:
+            self.stop()
+        if self.is_lsl is True:
             self.stop_lsl()
         if self.serial_port.isOpen():
             self.serial_port.close()
