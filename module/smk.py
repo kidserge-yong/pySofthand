@@ -47,6 +47,9 @@ class smk_arrayemg():
         self.restart()
 
     def restart(self):
+        """
+        reset all variable except serial port communication.
+        """
         self.__emg = [0 for _ in range(smkcommand.CHANNEL_NUM.value)]
         self.__offset = [-1 for _ in range(smkcommand.CHANNEL_NUM.value)]
 
@@ -66,6 +69,10 @@ class smk_arrayemg():
         self.__handle = self.mainloop()
 
     def start(self):
+        """
+        intial emg data transmittion from smk array system.
+        return 1 if no problem found
+        """
         if not self.serial_port.isOpen():
             print("Please connect to serial port before start communication")
             return 0
@@ -75,6 +82,10 @@ class smk_arrayemg():
         return 1
 
     def stop(self):
+        """
+        stop emg data transmittion from smk array system.
+        return 1 if no problem found
+        """
         if not self.serial_port.isOpen():
             print("Please connect to serial port before start communication")
             return 0
@@ -86,6 +97,13 @@ class smk_arrayemg():
     
     @threaded
     def mainloop(self, sleep_interval:float = 0.01):
+        """
+        Main loop that process at maximum 100Hz, current device is 20Hz
+        sleep_interval: Because we use separate thread to parallel control qbrobot without block the process, this value also affect sampling frequency of the data
+        Task:
+        get data from smk device
+        push new data to lsl system
+        """
         print("start loop for data in SMK")
         while True:
             time.sleep(sleep_interval)
@@ -108,6 +126,9 @@ class smk_arrayemg():
         print("break from mainloop")
 
     def __del__(self):
+        """
+        deconstrutor to take care of lsl and serial port and ensure it correctly closed.
+        """
         if DEBUG:
             print("start deconstruct smk_arrayemg")
         
@@ -117,10 +138,16 @@ class smk_arrayemg():
 
 
     def start_lsl(self):
+        """
+        initial lsl communication and allow data to send according to number of device in the robot
+        """
         self.__outlet = StreamOutlet(StreamInfo('SMK Array EMG system', 'EMG', 32, 100, 'int16', 'mysmk20191002'))
         self.is_lsl = True
 
     def stop_lsl(self):
+        """
+        recycle lsl communication
+        """
         self.__outlet = None
         self.is_lsl = False
 
@@ -154,12 +181,19 @@ class smk_arrayemg():
             pass
 
     def __opensmk(self, serial_port):
+        """
+        open serial port to robot and also configurate the communication protocol according to smk
+        port: serial_port
+        """
         if DEBUG:
             print("initial port communcation with %s" % (serial_port))
         self.serial_port = serial.Serial(serial_port.device, smkcommand.BAUDRATE.value, timeout=1)
         return 1
 
     def __start_data(self):
+        """
+        create command to intial data transmittion.
+        """
         if not self.serial_port.isOpen():
             return 0
 
@@ -177,6 +211,10 @@ class smk_arrayemg():
         self.__offset = [x for x in self.__emg]
 
     def __stop_data(self):
+        """
+        create command to stop data transmittion.
+        """
+        
         if not self.serial_port.isOpen():
             return 0
 
@@ -188,12 +226,18 @@ class smk_arrayemg():
         self.command_buf.append(command)
 
     def emg(self):
+        """
+        return emg data after the offset
+        """
         emg = [x - 65536 if x > 32767 else x for x in self.__emg]
         offset = [y - 65536 if y > 32767 else y for y in self.__offset]
         self.is_new_data = False
         return [j-k for j,k in zip(emg,offset)]
 
     def formatOutput(self):
+        """
+        return string of EMG value
+        """
         output = self.emg()
         text = ''
         for element in output:
@@ -202,6 +246,9 @@ class smk_arrayemg():
 
 
     def __getdata(self):
+        """
+        version control of getdata
+        """
         # Check state of system
         if not self.is_start:
             return "System is not started and getdata was called"
@@ -219,6 +266,9 @@ class smk_arrayemg():
             pass
 
     def __getdata_v1(self):
+        """
+        recevie data according to version 1 of smk array emg system
+        """
         receive = self.serial_port.read(1)
         if len(receive == 0):
             return
@@ -242,7 +292,9 @@ class smk_arrayemg():
             print("first byte error not 113 or 114")
 
     def __getdata_v2(self):
-
+        """
+        recevie data according to version 2 of smk array emg system
+        """
         value = []
         trigger = []
         check = ord(self.serial_port.read(1))
@@ -266,6 +318,9 @@ class smk_arrayemg():
 
 
     def calibrate(self, channel=0):
+        """
+        create command for calibrate device
+        """
         if not self.serial_port.isOpen():
             return "Port is not connected and calibrate was called"
         if not self.version == 1:
@@ -283,11 +338,17 @@ class smk_arrayemg():
         self.command_buf.append(command)
 
     def save2File(self, output, filename = 'SMKoutput.csv'):
+        """
+        save data to file (experiment), remove in future
+        """
         with open(filename, mode='w', newline='') as outputfile:
             output_writer = csv.writer(outputfile)
             output_writer.writerows(output)
 
     def read4File(self, filename = 'SMKoutput.csv'):
+        """
+        read data from file (experiment), remove in future
+        """
         data = []
         with open(filename, newline='') as csvfile:
             reader = csv.reader(csvfile)
@@ -301,6 +362,7 @@ class smk_arrayemg():
 
 if __name__ == "__main__": 
     smk = smk_arrayemg()
+    smk.calibrate()
     smk.start()
     smk.start_lsl()
 
