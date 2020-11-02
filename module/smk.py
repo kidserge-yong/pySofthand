@@ -20,190 +20,245 @@ def threaded(fn):
 
 
 class smk_arrayemg():
-    port = serial.Serial()
-    emg = [0 for _ in range(smkcommand.CHANNEL_NUM.value)]
-    offset = [-1 for _ in range(smkcommand.CHANNEL_NUM.value)]
+    serial_port = serial.Serial()
+    __emg = [0 for _ in range(smkcommand.CHANNEL_NUM.value)]
+    __offset = [-1 for _ in range(smkcommand.CHANNEL_NUM.value)]
 
-    version = smkcommand.VERSION.value
+    version = "0.0.0.0"
 
-    start = False
-    new_data = False
-    lsl = False
+    is_loop = True
+    is_start = False
+    is_new_data = False
+    is_lsl = False
 
-    handle = None
-    outlet = None
+    __handle = None
+    __outlet = None
 
+    command_buf = []
     utility = []
 
-    def __init__(self):
-        self.opensmk(self.portlist())
-        #self.start_data(False)
-        #self.stop_data()
-        #print(self.emg)
-        #if self.emg == [0 for _ in range(smkcommand.CHANNEL_NUM.value)]:
-        #    print("Post connection unsuccessful, check connection and serial port number.")
+    def __init__(self, serial_port = None, *args, **kwargs):
+        
+        try: 
+            self.connect_serial(serial_port)
+        except:
+            print("connection fail, please manualy connect to serial port")
+
+        self.restart()
+
+    def restart(self):
+        self.__emg = [0 for _ in range(smkcommand.CHANNEL_NUM.value)]
+        self.__offset = [-1 for _ in range(smkcommand.CHANNEL_NUM.value)]
+
+        self.version = smkcommand.VERSION.value
+
+        self.is_loop = True
+        self.is_start = False
+        self.is_new_data = False
+        self.is_lsl = False
+
+        self.__handle = None
+        self.__outlet = None
+
+        self.command_buf = []
+        self.utility = []
+
+        self.__handle = self.mainloop()
+
+    def start(self):
+        if not self.serial_port.isOpen():
+            print("Please connect to serial port before start communication")
+            return 0
+
+        self.__start_data()
+        self.is_start = True
+        return 1
+
+    def stop(self):
+        if not self.serial_port.isOpen():
+            print("Please connect to serial port before start communication")
+            return 0
+
+        self.__stop_data()
+        self.is_loop = False
+        self.is_start = False
+        return 1
+    
+    @threaded
+    def mainloop(self, sleep_interval:float = 0.01):
+        print("start loop for data in SMK")
+        while True:
+            time.sleep(sleep_interval)
+            if not self.serial_port.isOpen():
+                print("serial_port is disconnected from robot.")
+                break
+            if not self.is_loop:
+                break
+            
+            if self.is_start:
+                self.__getdata()
+            if self.is_lsl and self.is_new_data:
+                self.__outlet.push_sample(self.__emg)
+
+            com_len = len(self.command_buf)
+            if com_len > 0:
+                for item in self.command_buf:
+                    command = self.command_buf.pop(0)
+                    self.serial_port.write(command)
+        print("break from mainloop")
 
     def __del__(self):
         if DEBUG:
             print("start deconstruct smk_arrayemg")
         
-        self.stop_data()
+        self.stop()
         time.sleep(1.000)
-        self.port.close()
+        self.serial_port.close()
 
 
     def start_lsl(self):
-        self.outlet = StreamOutlet(StreamInfo('SMK Array EMG system', 'EMG', 32, 100, 'int16', 'mysmk20191002'))
-        self.lsl = True
+        self.__outlet = StreamOutlet(StreamInfo('SMK Array EMG system', 'EMG', 32, 100, 'int16', 'mysmk20191002'))
+        self.is_lsl = True
 
     def stop_lsl(self):
-        self.outlet = None
-        self.lsl = False
+        self.__outlet = None
+        self.is_lsl = False
 
-    def portlist(self):
-        comlist = list_ports.comports()
-        id = 0
-        for element in comlist:
-            if element:
-                id = id + 1
-                print("ID: " + str(id) + " -- Portname: " + str(element) + "\n")
-        port = int(input("Enter a port number: "))
+    def connect_serial(self, serial_port:serial.tools.list_ports_common.ListPortInfo):
+        """
+        function taking care of connect robot with serial port.
+        serial_port: element of list_ports.comports(), see pyserial for further information
+        """
+        if serial_port is None:
+            print("serial_port is not correct, initial manual serial port selection.")
+
+            while serial_port is None:
+                comlist = list_ports.comports()
+                id = 0
+                for element in comlist:
+                    if element:
+                        id = id + 1
+                        print("ID: " + str(id) + " -- Portname: " + str(element) + "\n")
+                port = int(input("Enter a port number: "))
+                if port - 1 < len(comlist):
+                    serial_port = comlist[port-1]
+                else:
+                    print("Wrong serial port selected, try again")
+                print(serial_port)
+
+
+            self.__opensmk(serial_port)
+        elif type(serial_port) is serial.tools.list_ports_common.ListPortInfo:
+            self.__opensmk(serial_port)
+        else:
+            pass
+
+    def __opensmk(self, serial_port):
         if DEBUG:
-            print("You select " + str(comlist[port-1]))
-        return comlist[port-1]
-
-    def opensmk(self, port):
-        self.port = serial.Serial(port.device, smkcommand.BAUDRATE.value, timeout=1)
+            print("initial port communcation with %s" % (serial_port))
+        self.serial_port = serial.Serial(serial_port.device, smkcommand.BAUDRATE.value, timeout=1)
         return 1
 
-    @threaded
-    def getdata_threaded(self):
-        print("start loop for data in SMK")
-        while True:
-            if self.start and self.port.isOpen():
-                self.getdata()
-            else:
-                print("no start")
-                if self.start:
-                    self.stop_data()
-                return -1
-
-    def start_data(self, START_LOOP = True):
-        if not self.port.isOpen():
-            return -1
+    def __start_data(self):
+        if not self.serial_port.isOpen():
+            return 0
 
         if self.version == 1:
             command = bytes([smkcommand.CMD_START.value])
         elif self.version == 2:
             command = smkcommand.CMD_START.value.encode()
 
-        self.port.write(command)
+        self.command_buf.append(command)
 
         # wait for response
         time.sleep(.200)
-        self.getdata()
-        self.getdata()
-        self.offset = [x for x in self.emg]
+        self.__getdata()
+        self.__getdata()
+        self.__offset = [x for x in self.__emg]
 
-        # Start receive loop
-        self.start = True
-        if START_LOOP:
-            self.handle = self.getdata_threaded()
-
-    def stop_data(self):
-        if not self.port.isOpen():
-            return -1
+    def __stop_data(self):
+        if not self.serial_port.isOpen():
+            return 0
 
         if self.version == 1:
             command = bytes([smkcommand.CMD_STOP.value])
         elif self.version == 2:
             command = smkcommand.CMD_STOP.value.encode()
 
-        self.port.write(command)
+        self.command_buf.append(command)
 
-        print("stop get data")
-
-        # Stop receive loop
-        self.start = False
-        time.sleep(.200)
-        self.handle = None
-
-    def calemg(self):
-        emg = [x - 65536 if x > 32767 else x for x in self.emg]
-        offset = [y - 65536 if y > 32767 else y for y in self.offset]
-        self.new_data = False
+    def emg(self):
+        emg = [x - 65536 if x > 32767 else x for x in self.__emg]
+        offset = [y - 65536 if y > 32767 else y for y in self.__offset]
+        self.is_new_data = False
         return [j-k for j,k in zip(emg,offset)]
 
     def formatOutput(self):
-        output = self.calemg()
+        output = self.emg()
         text = ''
         for element in output:
             text += '{0}'.format(element) + '\t'
         return text
 
 
-    def getdata(self):
+    def __getdata(self):
         # Check state of system
-        if not self.start:
+        if not self.is_start:
             return "System is not started and getdata was called"
-        if not self.port.isOpen():
+        if not self.serial_port.isOpen():
             return "Port is not connected and getdata was called"
 
         
         # Check version of system
         try:
             if self.version == 1:
-                self.getdata_v1()
+                self.__getdata_v1()
             elif self.version == 2:
-                self.getdata_v2()
+                self.__getdata_v2()
         except:
             pass
 
-    def getdata_v1(self):
-        receive = self.port.read(1)
+    def __getdata_v1(self):
+        receive = self.serial_port.read(1)
         if len(receive == 0):
             return
 
         if receive[0] == 113:
-            receive = self.port.read(17)
+            receive = self.serial_port.read(17)
             data_byte = receive[1:]
             value = []
             for i, k in zip(data_byte[0::2], data_byte[1::2]):
                 value.append((k * 256) + i)
-            self.emg[0:8] = value[0:8]
+            self.__emg[0:8] = value[0:8]
         elif receive[0] == 114:
-            receive = self.port.read(17)
+            receive = self.serial_port.read(17)
             data_byte = receive[1:]
             value = []
             for i, k in zip(data_byte[0::2], data_byte[1::2]):
                 value.append((k * 256) + i)
-            self.emg[8:12] = value[0:4]
-            self.new_data = True                        #only after this all data will be new data
-            if self.lsl:
-                self.outlet.push_sample(self.emg)
+            self.__emg[8:12] = value[0:4]
+            self.is_new_data = True                        #only after this all data will be new data
         else:
             print("first byte error not 113 or 114")
 
-    def getdata_v2(self):
+    def __getdata_v2(self):
 
         value = []
         trigger = []
-        check = ord(self.port.read(1))
+        check = ord(self.serial_port.read(1))
         #print(check)
         while not (check == smkcommand.CMD_CHECK_IEMG.value or check == smkcommand.CMD_CHECK_EMG.value):
-            check = ord(self.port.read(1))
+            check = ord(self.serial_port.read(1))
             #print(check)
 
-        data_byte = self.port.read(68)
+        data_byte = self.serial_port.read(68)
 
 
         trigger = data_byte[67:]
         for i, k in zip(data_byte[1:67:2], data_byte[2:67:2]):
             value.append((k * 256) + i)
-        self.emg[0:32] = value[1:33]
-        self.new_data = True
-        if self.lsl:
-            self.outlet.push_sample(self.emg)
+        self.__emg[0:32] = value[1:33]
+        self.is_new_data = True
 
 
         utility = [value[0]] + trigger
@@ -211,21 +266,21 @@ class smk_arrayemg():
 
 
     def calibrate(self, channel=0):
-        if not self.port.isOpen():
+        if not self.serial_port.isOpen():
             return "Port is not connected and calibrate was called"
         if not self.version == 1:
-            return "Do not have calibrate command for this version"
+            return "Do not have calibrate command for version" % (self.version)
 
         if channel == 0:
             command = bytes([smkcommand.CMD_START_ALL_CALIBRATE.value])
         else:
             command = bytes([smkcommand.CMD_START_ONE_CALIBRATE.value])
             command.append(bytes([channel]))
-        self.port.write(command)
+        self.command_buf.append(command)
         print("Wait 1 second")
         time.sleep(1.000)
         command = bytes([smkcommand.CMD_STOP_CALIBRATE.value])
-        self.port.write(command)
+        self.command_buf.append(command)
 
     def save2File(self, output, filename = 'SMKoutput.csv'):
         with open(filename, mode='w', newline='') as outputfile:
@@ -246,7 +301,7 @@ class smk_arrayemg():
 
 if __name__ == "__main__": 
     smk = smk_arrayemg()
-    smk.start_data()
+    smk.start()
     smk.start_lsl()
 
     time.sleep(1.000)
@@ -257,12 +312,12 @@ if __name__ == "__main__":
     try:
         print("Use Ctrl + C to emergency stop recording.")
         while time.time() < t_end:
-            if smk.new_data:
-                emg.append(smk.calemg())
+            if smk.is_new_data:
+                emg.append(smk.emg())
         print("Finish rest state.")
     except KeyboardInterrupt:
         pass
 
     smk.stop_lsl()
-    smk.stop_data()
+    smk.stop()
     smk.save2File(emg)

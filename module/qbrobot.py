@@ -69,10 +69,10 @@ class robot():
         while True:
             time.sleep(sleep_interval)
             if not self.is_start:
-                return
+                break
             if not self.serial_port.isOpen():
                 print("serial_port is not connect to robot.")
-                return
+                break
 
             if self.is_update_request is True:
                 self.__send_request()
@@ -91,6 +91,7 @@ class robot():
                 for item in self.command_buf:
                     command = self.command_buf.pop(0)
                     self.serial_port.write(command)
+        print("break from mainloop")
 
     def __del__(self):
         """
