@@ -45,7 +45,6 @@ class synergy:
         flat_x = np.hstack([X for X in Xs])
         #flat_y = np.hstack([y for y in ys])
         nflat_x, self.normal_X_range = self.__normalize(flat_x)
-        #plot(tp(nflat_x))
         index = 1
 
         for X, y in zip(Xs, ys):
@@ -61,7 +60,6 @@ class synergy:
             H = np.array(tp(H))
             #print(len(H), len(H[0]))
             #print(len(tem), len(tem[0]))
-            #multiplot(tem)
 
             #self.H = np.hstack([self.H, H]) if self.H.size else H
             self.H = np.concatenate((self.H, H), axis=1) if self.H.size else H
@@ -70,7 +68,6 @@ class synergy:
                 print("normal_X size = %d, %d" % (len(normal_X), len(normal_X[0])))
                 print("Synergy %d have %d component" % (index, opti_com))
                 index += 1 
-                multiplot(self.__synergyComputation(nflat_x, H))
                 #print(len(self.H))
                 #print(self.H, model.components_)
                 pass
@@ -82,19 +79,30 @@ class synergy:
         if DEBUG:
             print("nflat_x size = %d, %d" % (len(nflat_x), len(nflat_x[0])))
             print("self.H size = %d, %d" % (len(self.H), len(self.H[0])))
-            multiplot(tp(normal_synergy))
 
         return self
 
     def transform(self, source):
+        """
+        Calculate synergy and have option for increase performance.
+
+        Parameters
+        ----------
+        source : {array-like, sparse matrix} of shape (channel, time)
+            data source to transform to synergy
+
+        Returns
+        -------
+        nsynergy : returns nomallized transformed synergy.
+        """
         assert len(source) != 0, "source is empty"
 
         nsource, _ = self.__normalize(source, self.normal_X_range)
         synergy = self.__synergyComputation(nsource, self.H)
-        synergy, self.normal_synergy_range = self.__normalize(tp(synergy), self.normal_synergy_range)
+        nsynergy, self.normal_synergy_range = self.__normalize(tp(synergy), self.normal_synergy_range)
         #synergy, _ = self.__normalize(tp(ans), self.normal_synergy_range)
         #return tp(synergy)
-        return synergy
+        return nsynergy
 
     def __synergyComputation(self, source, synH):
         """
@@ -112,6 +120,8 @@ class synergy:
         -------
         synergy : returns transformed synergy.
         """
+        assert len(source) == len(synH), "source and synergy coefficient should have the same channel range"
+
         source = tp(source)
         e = 0.001
         #print("source = %d, %d" % (len(source), len(source[0])))
@@ -158,8 +168,26 @@ class synergy:
         #return tp(np.dot(invStSSt, tp(source)))
 
 
-    def __findoptimalcomp(self, X, y, max_components = 10, cc_criteria = 0.9, tol=0.00001):
-        
+    def __findoptimalcomp(self, X, y, max_components = 10, criteria = 0.9):
+        """
+        Find optimal number of component of NMF
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (channel, time)
+            data source to transform to synergy
+
+        y : {array-like, sparse matrix} of shape (channel, time)
+            data needed as reference for reward function
+
+        max_components : {int} max number of component, default 10
+
+        criteria : {float} criteria value
+
+        Returns
+        -------
+        max_cc_component : {int} number of component with max reward value or more than criteria
+        """
         n_components = 2
         max_cc = 0
         max_cc_component = 0
@@ -173,7 +201,7 @@ class synergy:
             predict = np.dot(H, X)
 
             cc = self.__efficientindicator(predict, y)
-            if cc > cc_criteria:
+            if cc > criteria:
                 return n_components
             if cc > max_cc:
                 max_cc = cc
@@ -200,15 +228,10 @@ class synergy:
                 accu_cc.append((abs(result_pos.rvalue) + abs(result_neg.rvalue)) / 2)
                 if DEBUG:
                     #print("x_channel, y_pos")
-                    #plot(tp([x_channel, y_pos]))
                     #print("x_channel, y_neg")
-                    #plot(tp([x_channel, y_neg]))
                     pass
             cc.append(sum(accu_cc)/len(accu_cc))
             if DEBUG:
-                #plot(x_channel)
-                #plot(y_pos)
-                #plot(y_neg)
                 #print(cc)
                 pass
            
@@ -234,12 +257,14 @@ class synergy:
         channel_range : array-like of tuple (min, max) with len(channel)
             min and max value used in normalized_data data
         """
-        assert len()
-        assert len(data) == len(channel_range), "data and channel_range should have the same channel range"
 
         normalized_data = []
         if channel_range == None:
             channel_range = [(min(channel), max(channel)) for channel in data]
+
+        assert len(data) == len(channel_range), "data and channel_range should have the same channel range"
+
+
         for ich in range(len(data)):
             range_value = float(channel_range[ich][1]-channel_range[ich][0])
             if range_value == 0:
