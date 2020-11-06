@@ -1,5 +1,6 @@
 /.vscode
 /venv
+/data
 *.pyc
 
 2020-10-26.zip
