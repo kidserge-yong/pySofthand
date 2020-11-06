@@ -1,7 +1,7 @@
 import csv
 import numpy as np
 from sklearn.decomposition import NMF
-import pandas as pd
+#import pandas as pd
 import matplotlib.pyplot as plt 
 import math
 
@@ -308,7 +308,7 @@ class Synergy:
 
 
 
-if __name__ == "main":
+if __name__ == "__main__":
     def plot(graph):
         plt.plot(graph)
         plt.show() 
@@ -349,47 +349,52 @@ if __name__ == "main":
 
     def SynMagComputation(iemg, synH):
         e = 0.001
-        invStS = inv(np.dot(tp(syncoof), syncoof))
-        invStSSt = np.dot(invStS, tp(syncoof))
+        #print("iemg = %d, %d" % (len(iemg), len(iemg[0])))
+        #print("synH = %d, %d" % (len(synH), len(synH[0])))
+        invStS = inv(np.dot(tp(synH), synH))
+        #print("invStS = %d, %d" % (len(invStS), len(invStS[0])))
+        invStSSt = np.dot(invStS, tp(synH))
+        #print("invStSSt = %d, %d" % (len(invStSSt), len(invStSSt[0])))
         ans = []
-        for i in range(len(iemg)+1):
+        for i in range(len(iemg)):
             eps = e
             Tx = tp(np.dot(invStSSt, tp(iemg[i])))
             count = 0   
-            while((Tx < -eps).any()):
-                minus = np.where((Tx < -eps)==True)
-                plus = np.where((Tx < -eps)==False)
-                minus = minus[0]
-                plus = plus[0]
+            # while((Tx < -eps).any()):
+            #     minus = np.where((Tx < -eps)==True)
+            #     plus = np.where((Tx < -eps)==False)
+            #     minus = minus[0]
+            #     plus = plus[0]
 
-                # delete channel that is minus
-                new_S = np.delete(syncoof, minus, 1)
-                cut = np.array([0.0]*len(Tx))
+            #     # delete channel that is minus
+            #     new_S = np.delete(syncoof, minus, 1)
+            #     cut = np.array([0.0]*len(Tx))
 
-                num = np.dot(syncoof[:, minus], tp(abs(Tx[minus])))
-                num = np.dot(tp(new_S), num)
-                den = inv(np.dot(tp(new_S),new_S))
-                test = np.dot(den, num)
+            #     num = np.dot(syncoof[:, minus], tp(abs(Tx[minus])))
+            #     num = np.dot(tp(new_S), num)
+            #     den = inv(np.dot(tp(new_S),new_S))
+            #     test = np.dot(den, num)
 
-                for j, item in enumerate(plus):
-                    cut[item] = test[j]
-                    #print(i, item)
+            #     for j, item in enumerate(plus):
+            #         cut[item] = test[j]
+            #         #print(i, item)
 
-                # for j, item in enumerate(minus):
-                #     Tx[item] = 0.0
-                    #print(i, item)
+            #     # for j, item in enumerate(minus):
+            #     #     Tx[item] = 0.0
+            #         #print(i, item)
 
-                Tx = Tx - cut
-                count += 1
-                eps = e*10**(np.floor(math.log10(count)))
+            #     Tx = Tx - cut
+            #     count += 1
+            #     eps = e*10**(np.floor(math.log10(count)))
             #     #print(Tx)
             ans.append(Tx)
             #print(Tx)
+        #print("Tx = %d" % (len(Tx)))
         return ans
 
     import os
 
-    filename = os. getcwd() + '/data/train_data_09_07_2020_14_17_34.csv'
+    filename = os. getcwd() + '/../data/train_data_09_17_2020_11_13_54.csv'
     data = []
     with open(filename, newline='') as csvfile:
         reader = csv.reader(csvfile)
@@ -400,8 +405,8 @@ if __name__ == "main":
                 #print(row)
                 pass
 
-    EMGdata = [item[:-4] for item in data]
-    Motiondata = [item[-4:] for item in data]
+    EMGdata = [item[:-6] for item in data]
+    Motiondata = [item[-6:] for item in data]
 
     data_X = []
     data_Y = []
@@ -419,16 +424,23 @@ if __name__ == "main":
         tem_X.append(i)
         tem_Y.append(j)
         pre_j = j
+    data_X.append(tem_X)
+    data_Y.append(tem_Y)
 
     nEMGdata, minEMGdata, maxEMGdata = array_normalize(tp(EMGdata))
 
-    gripdata_X = data_X[0] + data_X[1] + data_X[3]
+    gripdata_X = data_X[0] + data_X[1] + data_X[2]
     gripdata_X, tem2 , tem3 = array_normalize(tp(gripdata_X), minEMGdata, maxEMGdata)
-    gripdata_Y = data_Y[0] + data_Y[1] + data_Y[3]
+    gripdata_Y = data_Y[0] + data_Y[1] + data_Y[2]
 
-    wristdata_X = data_X[0] + data_X[5] + data_X[7]
+    wristdata_X = data_X[0] + data_X[3] + data_X[4]
     wristdata_X, tem2 , tem3 = array_normalize(tp(wristdata_X), minEMGdata, maxEMGdata)
-    wristdata_Y = data_Y[0] + data_Y[5] + data_Y[7]
+    wristdata_Y = data_Y[0] + data_Y[3] + data_Y[4]
+
+    flat_x = data_X[0] + data_X[1] + data_X[2] + data_X[0] + data_X[3] + data_X[4] + data_X[0] + data_X[5] + data_X[6]
+    nflat_x, tem2 , tem3 = array_normalize(tp(flat_x), minEMGdata, maxEMGdata)
+
+    plot(nflat_x)
 
     synGripOpen = Synergy()
     synWrist = Synergy()
@@ -439,7 +451,9 @@ if __name__ == "main":
     synWrist.trainModel(wristdata_X, n_components = len(opti_syn))
 
     synGripOpencoof = synGripOpen.getConvertMetric()
+    plot(SynMagComputation(nflat_x, synGripOpen.H))
     synWristcoof = synWrist.getConvertMetric()
+    plot(SynMagComputation(nflat_x, synWrist.H))
 
     syn_grip = synGripOpen.getSynergy(gripdata_X)
     syn_wrist = synWrist.getSynergy(wristdata_X)
@@ -479,7 +493,7 @@ if __name__ == "main":
     [1	,0.193921412311705	,0.201006065820555	,1	,0.356570685693097	,0.115838330401218]
     ]
 
-    syncoof = np.array(new_syncoof)
+    #syncoof = np.array(new_syncoof)
     syncoof = np.concatenate((synGripOpen.H, synWrist.H), axis=1)
 
     syncoof, tem2 , tem3 = array_normalize(tp(syncoof))
@@ -491,6 +505,12 @@ if __name__ == "main":
     axs[1].plot(new_syncoof)
     plt.show()
 
+    print("nEMGdata size = %d, %d" % (len(nEMGdata), len(nEMGdata[0])))
+    print("syncoof size = %d, %d" % (len(syncoof), len(syncoof[0])))
+
+    #print(syncoof)
+
+    
     Dat = SynMagComputation(nEMGdata, syncoof)
     nDat, tem2 , tem3 = array_normalize(tp(Dat))
 
