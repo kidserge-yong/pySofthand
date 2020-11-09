@@ -28,6 +28,8 @@ class device():
 
     serial_port = None
 
+    is_connect = False
+
     POS_RANGE = (-32766, 32767)
     CUR_RANGE = (-32766, 32767)
     STF_RANGE = (0, 32767)
@@ -87,6 +89,9 @@ class device():
             return 0
         if self.serial_port.isOpen() is False:
             print("serial_port is not connect to device.")
+            return 0
+        if self.is_connect is False:
+            print("Device %d is not connect to serial port." % (self.device_id))
             return 0
 
         if abs(position - self.pos[0]) > self.MINIMAL_CHANGES:
@@ -383,6 +388,7 @@ class device():
 
         print("Finish test for connectivity of qbrobot:device%d." %
               (self.device_id))
+        self.is_connect = True
 
     def updateData(self, data):
         """
