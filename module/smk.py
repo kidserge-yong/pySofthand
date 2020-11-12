@@ -324,7 +324,7 @@ class smk_arrayemg():
         if not self.serial_port.isOpen():
             return "Port is not connected and calibrate was called"
         if not self.version == 1:
-            return "Do not have calibrate command for version" % (self.version)
+            return "Do not have calibrate command for version %d" % (self.version)
 
         if channel == 0:
             command = bytes([smkcommand.CMD_START_ALL_CALIBRATE.value])

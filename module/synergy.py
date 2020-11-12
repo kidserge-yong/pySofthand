@@ -10,7 +10,7 @@ dot = lambda x, y: np.dot(x,y)
 
 DEBUG = False
 
-class synergy:
+class synergy():
 
     init_method = 'random'
     solver = 'mu'
@@ -262,7 +262,7 @@ class synergy:
         if channel_range == None:
             channel_range = [(min(channel), max(channel)) for channel in data]
 
-        assert len(data) == len(channel_range), "data and channel_range should have the same channel range"
+        assert len(data) == len(channel_range), "data and channel_range should have the same channel range: %d and %d" % (len(data), len(channel_range))
 
 
         for ich in range(len(data)):
