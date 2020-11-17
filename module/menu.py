@@ -82,4 +82,5 @@ def connect_menu(args):
 
         pygame.display.update()
 
+    pygame.quit()
     return args

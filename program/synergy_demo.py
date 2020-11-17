@@ -97,13 +97,13 @@ def main_loop(args=0):
     Collect Training data
     """
     ExperimentSequence = {
-        0:("Rest", 1, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
-        1:("Grip 100%", 1, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
-        2:("Open 100%", 1, [-1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
-        3:("Wrist Flex 100%", 1, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
-        4:("Wrist Exten 100%", 1, [0.0, 0.0, -1.0, 0.0, 0.0, 0.0]),
-        5:("Pronation 100%", 1, [0.0, 0.0, 0.0, 0.0, 1.0, 0.0]),
-        6:("Supination 100%", 1, [0.0, 0.0, 0.0, 0.0, -1.0, 0.0]),
+        0:("Rest", 5, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+        1:("Grip 100%", 5, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+        2:("Open 100%", 5, [-1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+        3:("Wrist Flex 100%", 5, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
+        4:("Wrist Exten 100%", 5, [0.0, 0.0, -1.0, 0.0, 0.0, 0.0]),
+        5:("Pronation 100%", 5, [0.0, 0.0, 0.0, 0.0, 1.0, 0.0]),
+        6:("Supination 100%", 5, [0.0, 0.0, 0.0, 0.0, -1.0, 0.0]),
     }
     sectional_data = []
     train_data = []
@@ -147,36 +147,70 @@ def main_loop(args=0):
 
     xsynergy = tp(syn.transform(tp([item[:-6] for item in train_data])))
     nY = [item[-6:] for item in train_data]
+    
 
-    print(len(xsynergy), len(xsynergy[0]))
-    print(len(nY), len(nY[0]))
+    multiplot(xsynergy)
+    multiplot(nY)
+    
+
+    #print(len(xsynergy), len(xsynergy[0]))
+    #print(len(nY), len(nY[0]))
 
     regressor.fit(xsynergy, nY)
+
+    angle = regressor.predict(xsynergy)
+    multiplot(angle)
 
     """
     Testing model
     """
+    run_data = []
+    print("Start main testing loop")
     try:
         while(True):
             if smk.is_new_data:
                 xemg = [smk.emg()]
-                xsyn = syn.transform(tp(xemg))
+                xsyn = tp(syn.transform(tp(xemg)))
+                #xsyn = syn.transform(tp(xemg))
                 angle = regressor.predict(xsyn)
 
-                qbrobot.movePart(0, int(angle[0]))
-                qbrobot.movePart(1, int(angle[2]))
-                qbrobot.movePart(2, int(angle[4]))
+                grip_pos = angle[0][0]*19000 + 0
+                #grip_pos = position[0][0]*20000 +3000
+                if grip_pos < 0:
+                    grip_pos = 0
+                elif grip_pos > 19000:
+                    grip_pos = 19000
 
-            pass
+                wrist_pos = (angle[0][2]*10000)-5000
+                #wrist_pos = (position[0][2]*10000)-5000
+                if wrist_pos < -5000 :
+                    wrist_pos = -5000
+                elif wrist_pos > 5000:
+                    wrist_pos = 5000
+
+                prosu_pos = (angle[0][4]*10000)-5000
+                #wrist_pos = (position[0][2]*10000)-5000
+                if prosu_pos < -5000 :
+                    prosu_pos = -5000
+                elif prosu_pos > 5000:
+                    prosu_pos = 5000
+
+                softhand.movedevice(0, int(grip_pos))
+                softhand.movedevice(1, int(wrist_pos))
+                softhand.movedevice(2, int(prosu_pos))
+                run_data.append([xemg[0], angle[0]])
     except KeyboardInterrupt:
-        pass
+        print("out of loop")
 
 
     """
     Saving
     """
-    smk.save2File(train_data, filename = "../data/train_data_"+time.strftime("%m_%d_%Y_%H_%M_%S")+".csv")
-    smk.save2File(run_data, filename = "../data/run_data_"+time.strftime("%m_%d_%Y_%H_%M_%S")+".csv")
+    try:
+        smk.save2File(train_data, filename = "../data/train_data_"+time.strftime("%m_%d_%Y_%H_%M_%S")+".csv")
+        smk.save2File(run_data, filename = "../data/run_data_"+time.strftime("%m_%d_%Y_%H_%M_%S")+".csv")
+    except:
+        pass
 
     """
     Stop process
