@@ -14,7 +14,8 @@ class synergy():
 
     init_method = 'random'
     solver = 'mu'
-    max_iter = 1000
+    max_iter = 10000
+    tol = 5e-3
     H = np.array([])
 
     
@@ -42,7 +43,7 @@ class synergy():
         assert len(ys) != 0, "ys is empty"
         assert len(Xs) == len(ys), "Xs and ys have different size"
 
-        flat_x = np.hstack([X for X in Xs])
+        flat_x = np.vstack([X for X in Xs])
         #flat_y = np.hstack([y for y in ys])
         nflat_x, self.normal_X_range = self.__normalize(flat_x)
         index = 1
@@ -51,15 +52,31 @@ class synergy():
             normal_X, _ = self.__normalize(X, self.normal_X_range)
             #normal_y, _ = self.__normalize(y, None)
 
-            opti_com = self.__findoptimalcomp(normal_X, y)
-            #opti_com = 3
-            model = NMF(n_components = opti_com, init = self.init_method, solver = self.solver, max_iter = self.max_iter)
-            
-            model.fit_transform(tp(normal_X))
-            H, _ = self.__normalize(model.components_)
-            H = np.array(tp(H))
+            #opti_com = self.__findoptimalcomp(normal_X, y)
+            opti_com = 3
+
+            # model = NMF(n_components = opti_com, init = self.init_method, solver = self.solver, max_iter = self.max_iter, tol = self.tol)
+            # model.fit_transform(tp(normal_X))
+            # H, _ = self.__normalize(model.components_)
+            # H = np.array(tp(H))
+
+            #W, H, RR = self.__NMF(tp(normal_X), opti_com)
             #print(len(H), len(H[0]))
             #print(len(tem), len(tem[0]))
+
+            X = np.array(X)
+
+            channel_num = X.shape[1]
+            sample_num = X.shape[0]
+            component_num = opti_com
+            
+
+            from numpy import random
+            U = abs(random.random([sample_num, component_num]))
+            V = abs(random.random([channel_num, component_num]))
+
+            self.U, self.V, self.CPUtime, self.NRV, self.RRV = self.fasthals(X, U, V, 1000)
+            H = V
 
             #self.H = np.hstack([self.H, H]) if self.H.size else H
             self.H = np.concatenate((self.H, H), axis=1) if self.H.size else H
@@ -74,7 +91,7 @@ class synergy():
 
         
         synergy = self.__synergyComputation(nflat_x, self.H)
-        normal_synergy, self.normal_synergy_range = self.__normalize(tp(synergy))
+        normal_synergy, self.normal_synergy_range = self.__normalize(synergy)
         
         if DEBUG:
             print("nflat_x size = %d, %d" % (len(nflat_x), len(nflat_x[0])))
@@ -88,7 +105,7 @@ class synergy():
 
         Parameters
         ----------
-        source : {array-like, sparse matrix} of shape (channel, time)
+        source : {array-like, sparse matrix} of shape (time, channel)
             data source to transform to synergy
 
         Returns
@@ -99,10 +116,95 @@ class synergy():
 
         nsource, _ = self.__normalize(source, self.normal_X_range)
         synergy = self.__synergyComputation(nsource, self.H)
-        nsynergy, self.normal_synergy_range = self.__normalize(tp(synergy), self.normal_synergy_range)
+        nsynergy, self.normal_synergy_range = self.__normalize(synergy, self.normal_synergy_range)
         #synergy, _ = self.__normalize(tp(ans), self.normal_synergy_range)
         #return tp(synergy)
         return nsynergy
+
+    def fasthals(self, X, U, V, iter=30):
+        """
+        Calcualte synergy by minimize euclidean distance
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (time, channel)
+            data source to transform to synergy
+
+        U : array-like of shape (time, component)
+            transform matrix according to NMF model
+
+        V : array-like of shape (channel, component)
+            transform matrix according to NMF model
+
+        iter: interations
+
+        Returns
+        -------
+        CPUtime: CPUtime taken for each update
+        
+        NRV    : Normalized Residual Value for each update
+                     || X-UV^T || / ||X||
+
+        RRV    : Relative Residual Value for each update
+                    log_{10} (||X-U_{t}V_{t}|| / ||X-U_{0}V_{0}||)
+
+        X = M (number of sample) x N (number of channel) matrix
+        U = M (number of sample) x K (number of component) matrix
+        V = N (number of channel) x K (number of component) matrix
+        """
+
+        component_num = V.shape[1]
+        #sample_num = X.shape[0]
+
+        #from numpy import random
+        #U = abs(random.random([sample_num, component_num]))
+
+        CPUtime = np.zeros(iter+1)
+        NRV = np.zeros(iter+1)
+        RRV = np.zeros(iter+1)
+        eps = 1e-08
+
+        from numpy import linalg as LA
+        normX = LA.norm(X, 'fro')**2
+
+        print("normX:", normX)
+
+        Ap0 = normX - 2*np.trace(dot(dot(tp(U), X), V)) + np.trace(dot(dot(tp(U), U), (dot(tp(V), V))))
+
+        print("Ap0:", Ap0)
+
+        CPUtime[0] = 0
+        NRV[0] = Ap0 / normX
+        RRV[0] = 1
+
+        import time
+        import math
+        for i in range(iter):
+            t = time.time()
+
+            A = dot(X, V)
+            B = dot(tp(V), V)
+
+            for j in range(component_num):
+                tmp = (A[:, j] - dot(U, B[:, j]) + dot(U[:, j], B[j, j])) / B[j, j]
+                tmp = [x if x > eps else eps for x in tmp]
+                U[:, j] = tmp
+
+            A = dot(tp(X), U)
+            B = dot(tp(U), U)
+
+            for j in range(component_num):
+                tmp = (A[:, j] - dot(V, B[:, j]) + dot(V[:, j], B[j, j])) / B[j, j]
+                tmp = [x if x > eps else eps for x in tmp]
+                V[:, j] = tmp
+
+
+            CPUtime[i]=time.time()-t
+            Ap = normX - 2*np.trace(dot(dot(tp(U), X), V)) + np.trace(dot(dot(tp(U), U), (dot(tp(V), V))))
+            NRV[i+1] = Ap / normX
+            RRV[i+1] = math.log10(Ap / Ap0)
+
+        return U, V, CPUtime, NRV, RRV
 
     def __synergyComputation(self, source, synH):
         """
@@ -110,7 +212,7 @@ class synergy():
 
         Parameters
         ----------
-        source : {array-like, sparse matrix} of shape (channel, time)
+        source : {array-like, sparse matrix} of shape (time, channel)
             data source to transform to synergy
 
         synH : array-like of shape (channel, component)
@@ -120,9 +222,8 @@ class synergy():
         -------
         synergy : returns transformed synergy.
         """
-        assert len(source) == len(synH), "source and synergy coefficient should have the same channel range"
+        assert len(source[0]) == len(synH), "source and synergy coefficient should have the same channel range"
 
-        source = tp(source)
         e = 0.001
         #print("source = %d, %d" % (len(source), len(source[0])))
         #print("synH = %d, %d" % (len(synH), len(synH[0])))
@@ -243,8 +344,8 @@ class synergy():
 
         Parameters
         ----------
-        data : {array-like, sparse matrix} of shape (channel, time)
-            data source to normalize
+        data : {array-like, sparse matrix} of shape (time, channel)
+            data source to transform to synergy
 
         channel_range : array-like of tuple (min, max) with len(channel) 
             of each channel for normalization
@@ -257,6 +358,7 @@ class synergy():
         channel_range : array-like of tuple (min, max) with len(channel)
             min and max value used in normalized_data data
         """
+        data = tp(data)
 
         normalized_data = []
         if channel_range == None:
@@ -275,7 +377,93 @@ class synergy():
                 if normal_data[inor] < 0:
                     normal_data[inor] = 0.0
             normalized_data.append(normal_data)
-        return normalized_data, channel_range
+        return tp(normalized_data), channel_range
+
+    def NMF(self, data, syn_num):
+        """
+        data: time x channel
+        syn_num : int
+        """
+        i, j, k, l = 0,0,0,0
+        RR = 0.0
+        V = data                # time * channe;
+        M = len(data)           # time
+        N = len(data[0])        # channel
+        K = syn_num             # number of synergy (syn_num)
+
+        eps = 1e-08
+        W = np.random.rand(M, K)    # M * K
+        H = np.random.rand(N, K)    # N * K
+
+        mean = np.zeros(M , dtype=float)
+        R2 = np.zeros(10000, dtype=float)
+
+        for i in range(10000):
+
+            VH = dot(V,H)           # time * channel x channel * syn_num -> time * syn_num
+            HTH = dot(tp(H), H)
+
+            for j in range(K):
+                HTHs = np.zeros((K, 1), dtype=float)   # K * 1
+                for k in range(K):
+                    HTHs[k, 0] = HTH[k, j]
+                WHTHs = dot(W, HTHs)    # M * 1
+                for k in range(M):
+                    temp = (VH[k, j] - WHTHs[k, 0] + W[k, j] * HTH[j, j]) / HTH[j, j]
+                    W[k, j] = eps if temp <= eps else temp
+            
+            W, _, _ = self.normalize(W)
+
+            VT = tp(V)              # channel * time (M * N)
+            VTW = dot(VT, W)        # channel * time x time * syn_num -> channel * syn_num
+            WTW = dot(tp(W), W)
+
+            for j in range(K):
+                WTWs = np.zeros((K, 1), dtype=float)   # K * 1
+                for k in range(K):
+                    WTWs[k, 0] = WTW[k, j]
+                HWTWs = dot(H, WTWs)
+                for k in range(N):
+                    temp = (VTW[k, j] - HWTWs[k, 0] + H[k, j] * WTW[j, j]) / WTW[j, j]
+                    H[k, j] = eps if temp <= eps else temp
+
+            HT = tp(H)          # K * N
+            WH = dot(W, HT)       # M * K x K * N -> channel * time (M * N)
+            sse = 0.0
+            sst = 0.0
+            average = 0.0
+            for j in range(M):
+                for k in range(N):
+                    sse += (V[j, k] - WH[j, k]) * (V[j, k] - WH[j, k])
+
+            for j in range(M):
+                average = 0.0
+                for k in range(N):
+                    average += V[j, k]
+                average = average / N
+                mean[j] = average
+            
+            for j in range(M):
+                for k in range(N):
+                    sst += (V[j, k] - mean[j]) * (V[j, k] - mean[j])
+
+            R2[i] = 1 - sse / sst
+            RR = R2[i]
+            
+            if i > 20:
+                compare = 0
+                for j in range(20):
+                    temp = abs(R2[i - j] - R2[i - j - 1])
+                    if temp < 1.0e-5:
+                        compare += 1
+                if compare == 20:
+                    break
+
+        W_result = W
+        H_result = H
+        Rsquare = RR
+
+        return W, H, RR
 
 
 if __name__ == "__main__":
@@ -319,7 +507,8 @@ if __name__ == "__main__":
             ans.append(normal_data)
         return ans, min_ans, max_ans
 
-    filename = os. getcwd() + '/../data/train_data_09_17_2020_11_13_54.csv'
+    #filename = os. getcwd() + '/../data/train_data_09_17_2020_11_13_54.csv'
+    filename = os. getcwd() + '/../data/train_data_11_17_2020_16_38_00.csv'
     data = []
     with open(filename, newline='') as csvfile:
         reader = csv.reader(csvfile)
@@ -353,7 +542,7 @@ if __name__ == "__main__":
     data_X.append(tp(tem_X))
     data_Y.append(tp(tem_Y))
 
-    nEMGdata, minEMGdata, maxEMGdata = array_normalize(tp(EMGdata))
+    nEMGdata, minEMGdata, maxEMGdata = array_normalize(EMGdata)
 
     # for i in range(len(data_X)):
     #     data_X[i] = np.array(data_X[i])
@@ -372,21 +561,29 @@ if __name__ == "__main__":
     prosudata_X, tem2 , tem3 = array_normalize(prosudata_X, minEMGdata, maxEMGdata)
     prosudata_Y = np.concatenate((data_Y[0], data_Y[5], data_Y[6]), axis=1)
 
-    sum_x = [gripdata_X, wristdata_X, prosudata_X]
-    sum_y = [gripdata_Y, wristdata_Y, prosudata_Y]
+    sum_x = [tp(gripdata_X), tp(wristdata_X), tp(prosudata_X)]
+    sum_y = [tp(gripdata_Y), tp(wristdata_Y), tp(prosudata_Y)]
 
-    synergy = synergy()
-    synergy.fit(sum_x, sum_y)
-    transform_y = synergy.transform(nEMGdata)
+    syn = synergy()
+    syn.fit(sum_x, sum_y)
+    transform_y = syn.transform(EMGdata)
+    multiplot(transform_y)
     #plot(EMGdata)
     #plot(transform_y)
 
     ny, _, _ = array_normalize(transform_y)
 
-    multiplot(tp(ny))
+    #multiplot(tp(ny))
     #multiplot(tp(tp(ny)[1:10])) 
 
-    transform_y = synergy.transform(gripdata_X)
+    transform_y = syn.transform(tp(gripdata_X))
+
+    # syn = synergy()
+    # syn.fit([nEMGdata], [tp(Motiondata)])
+    # transform_y = syn.fasthals(tp(np.array(nEMGdata)), syn.H, 30)
+    # multiplot(transform_y)
+    # transform_y = syn.transform(nEMGdata)
+    # multiplot(transform_y)
 
 
     
