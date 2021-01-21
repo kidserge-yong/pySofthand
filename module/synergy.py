@@ -49,11 +49,11 @@ class synergy():
         index = 1
 
         for X, y in zip(Xs, ys):
-            normal_X, _ = self.__normalize(X, self.normal_X_range)
+            #normal_X, _ = self.__normalize(X, self.normal_X_range)
             #normal_y, _ = self.__normalize(y, None)
 
-            #opti_com = self.__findoptimalcomp(normal_X, y)
-            opti_com = 3
+            opti_com = self.__findoptimalcomp(X, y)
+            #opti_com = 3
 
             # model = NMF(n_components = opti_com, init = self.init_method, solver = self.solver, max_iter = self.max_iter, tol = self.tol)
             # model.fit_transform(tp(normal_X))
@@ -89,9 +89,11 @@ class synergy():
                 #print(self.H, model.components_)
                 pass
 
-        
-        synergy = self.__synergyComputation(nflat_x, self.H)
+        synergy, V, CPUtime, NRV, RRV = self.calfhals(flat_x, self.H, 30)
+        #multiplot(synergy)
+        #synergy = self.__synergyComputation(flat_x, self.H)
         normal_synergy, self.normal_synergy_range = self.__normalize(synergy)
+        #multiplot(normal_synergy)
         
         if DEBUG:
             print("nflat_x size = %d, %d" % (len(nflat_x), len(nflat_x[0])))
@@ -114,12 +116,102 @@ class synergy():
         """
         assert len(source) != 0, "source is empty"
 
-        nsource, _ = self.__normalize(source, self.normal_X_range)
-        synergy = self.__synergyComputation(nsource, self.H)
-        nsynergy, self.normal_synergy_range = self.__normalize(synergy, self.normal_synergy_range)
+        #nsource, _ = self.__normalize(source, self.normal_X_range)
+        #synergy = self.__synergyComputation(nsource, self.H)
+        #nsynergy, self.normal_synergy_range = self.__normalize(synergy, self.normal_synergy_range)
+
+
         #synergy, _ = self.__normalize(tp(ans), self.normal_synergy_range)
         #return tp(synergy)
+
+        U, V, CPUtime, NRV, RRV = self.calfhals(source, self.H, 30)
+        nsynergy, self.normal_synergy_range = self.__normalize(U, self.normal_synergy_range)
+
         return nsynergy
+
+    def calfhals(self, source, H, iter=30):
+        """
+        Calcualte synergy by minimize euclidean distance
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (time, channel)
+            data source to transform to synergy
+
+        U : array-like of shape (time, component)
+            transform matrix according to NMF model
+
+        V : array-like of shape (channel, component)
+            transform matrix according to NMF model
+
+        iter: interations
+
+        Returns
+        -------
+        CPUtime: CPUtime taken for each update
+        
+        NRV    : Normalized Residual Value for each update
+                     || X-UV^T || / ||X||
+
+        RRV    : Relative Residual Value for each update
+                    log_{10} (||X-U_{t}V_{t}|| / ||X-U_{0}V_{0}||)
+
+        X = M (number of sample) x N (number of channel) matrix
+        U = M (number of sample) x K (number of component) matrix
+        V = N (number of channel) x K (number of component) matrix
+        """
+        
+        X = source
+        V = H
+        component_num = H.shape[1]
+        sample_num = len(source)
+
+        from numpy import random
+        U = abs(random.random([sample_num, component_num]))
+
+        CPUtime = np.zeros(iter+1)
+        NRV = np.zeros(iter+1)
+        RRV = np.zeros(iter+1)
+        eps = 1e-08
+
+        from numpy import linalg as LA
+        normX = LA.norm(X, 'fro')**2
+
+        if DEBUG:
+            print("normX:", normX)
+
+        Ap0 = normX - 2*np.trace(dot(dot(tp(U), X), V)) + np.trace(dot(dot(tp(U), U), (dot(tp(V), V))))
+
+        if DEBUG:
+            print("Ap0:", Ap0)
+
+        CPUtime[0] = 0
+        NRV[0] = Ap0 / normX
+        RRV[0] = 1
+
+        import time
+        import math
+        for i in range(iter):
+            t = time.time()
+
+            A = dot(X, V)
+            B = dot(tp(V), V)
+
+            for j in range(component_num):
+                tmp = (A[:, j] - dot(U, B[:, j]) + dot(U[:, j], B[j, j])) / B[j, j]
+                tmp = [x if x > eps else eps for x in tmp]
+                U[:, j] = tmp
+
+            CPUtime[i]=time.time()-t
+            Ap = normX - 2*np.trace(dot(dot(tp(U), X), V)) + np.trace(dot(dot(tp(U), U), (dot(tp(V), V))))
+            NRV[i+1] = Ap / normX  
+
+            try:
+                RRV[i+1] = math.log10(Ap / Ap0)
+            except ValueError:
+                RRV[i+1] = 0
+
+        return U, V, CPUtime, NRV, RRV
 
     def fasthals(self, X, U, V, iter=30):
         """
@@ -153,7 +245,7 @@ class synergy():
         V = N (number of channel) x K (number of component) matrix
         """
 
-        component_num = V.shape[1]
+        component_num = U.shape[1]
         #sample_num = X.shape[0]
 
         #from numpy import random
@@ -167,11 +259,13 @@ class synergy():
         from numpy import linalg as LA
         normX = LA.norm(X, 'fro')**2
 
-        print("normX:", normX)
+        if DEBUG:
+            print("normX:", normX)
 
         Ap0 = normX - 2*np.trace(dot(dot(tp(U), X), V)) + np.trace(dot(dot(tp(U), U), (dot(tp(V), V))))
 
-        print("Ap0:", Ap0)
+        if DEBUG:
+            print("Ap0:", Ap0)
 
         CPUtime[0] = 0
         NRV[0] = Ap0 / normX
@@ -201,8 +295,12 @@ class synergy():
 
             CPUtime[i]=time.time()-t
             Ap = normX - 2*np.trace(dot(dot(tp(U), X), V)) + np.trace(dot(dot(tp(U), U), (dot(tp(V), V))))
-            NRV[i+1] = Ap / normX
-            RRV[i+1] = math.log10(Ap / Ap0)
+            NRV[i+1] = Ap / normX  
+
+            try:
+                RRV[i+1] = math.log10(Ap / Ap0)
+            except ValueError:
+                RRV[i+1] = 0
 
         return U, V, CPUtime, NRV, RRV
 
@@ -295,13 +393,20 @@ class synergy():
 
         while n_components < max_components:
             n_components = n_components + 1
-            model = NMF(n_components = n_components, init = self.init_method, solver = self.solver, max_iter = self.max_iter)
-            W = model.fit_transform(tp(X))
-            H = model.components_
 
-            predict = np.dot(H, X)
+            X = np.array(X)
 
-            cc = self.__efficientindicator(predict, y)
+            channel_num = X.shape[1]
+            sample_num = X.shape[0]
+
+            from numpy import random
+            U = abs(random.random([sample_num, n_components]))
+            V = abs(random.random([channel_num, n_components]))
+
+            U, V, CPUtime, NRV, RRV = self.fasthals(X, U, V, 1000)
+
+            #multiplot(U)
+            cc = self.__efficientindicator(U, y)
             if cc > criteria:
                 return n_components
             if cc > max_cc:
@@ -316,6 +421,28 @@ class synergy():
         return max_cc_component
 
     def __efficientindicator(self, X, y):
+        """
+        Calcualte synergy by minimize euclidean distance
+
+        Parameters
+        ----------
+        X : array-like of shape (time, channel)
+            input data that need to find efficientcy
+
+        y : array-like of shape (time, channel)
+            correct data
+
+        Returns
+        -------
+        cc : float
+             maxmimum cc value
+
+        X = M (number of sample) x N (number of channel) matrix
+        y = M (number of sample) x N (number of channel) matrix
+        """
+        X = tp(X)
+        y = tp(y)
+
         import scipy.stats
         cc = []
         for y_channel in y:
@@ -328,8 +455,8 @@ class synergy():
 
                 accu_cc.append((abs(result_pos.rvalue) + abs(result_neg.rvalue)) / 2)
                 if DEBUG:
-                    #print("x_channel, y_pos")
-                    #print("x_channel, y_neg")
+                    print("x_channel, y_pos")
+                    print("x_channel, y_neg")
                     pass
             cc.append(sum(accu_cc)/len(accu_cc))
             if DEBUG:
@@ -508,7 +635,7 @@ if __name__ == "__main__":
         return ans, min_ans, max_ans
 
     #filename = os. getcwd() + '/../data/train_data_09_17_2020_11_13_54.csv'
-    filename = os. getcwd() + '/../data/train_data_11_17_2020_16_38_00.csv'
+    filename = os. getcwd() + '/../data/train_data_11_25_2020_16_36_00.csv'
     data = []
     with open(filename, newline='') as csvfile:
         reader = csv.reader(csvfile)
@@ -550,15 +677,12 @@ if __name__ == "__main__":
     #     data_Y[i] = np.array(data_Y[i])
 
     gripdata_X = np.concatenate((data_X[0], data_X[1], data_X[2]), axis=1)
-    gripdata_X, tem2 , tem3 = array_normalize(gripdata_X, minEMGdata, maxEMGdata)
     gripdata_Y = np.concatenate((data_Y[0], data_Y[1], data_Y[2]), axis=1)
 
     wristdata_X = np.concatenate((data_X[0], data_X[3], data_X[4]), axis=1)
-    wristdata_X, tem2 , tem3 = array_normalize(wristdata_X, minEMGdata, maxEMGdata)
     wristdata_Y = np.concatenate((data_Y[0], data_Y[3], data_Y[4]), axis=1)
 
     prosudata_X = np.concatenate((data_X[0], data_X[5], data_X[6]), axis=1)
-    prosudata_X, tem2 , tem3 = array_normalize(prosudata_X, minEMGdata, maxEMGdata)
     prosudata_Y = np.concatenate((data_Y[0], data_Y[5], data_Y[6]), axis=1)
 
     sum_x = [tp(gripdata_X), tp(wristdata_X), tp(prosudata_X)]
@@ -571,20 +695,72 @@ if __name__ == "__main__":
     #plot(EMGdata)
     #plot(transform_y)
 
-    ny, _, _ = array_normalize(transform_y)
+    #ny, _, _ = array_normalize(transform_y)
 
     #multiplot(tp(ny))
     #multiplot(tp(tp(ny)[1:10])) 
 
-    transform_y = syn.transform(tp(gripdata_X))
+    #transform_y = syn.transform(tp(gripdata_X))
 
     # syn = synergy()
-    # syn.fit([nEMGdata], [tp(Motiondata)])
+    # syn.fit([EMGdata], [tp(Motiondata)])
     # transform_y = syn.fasthals(tp(np.array(nEMGdata)), syn.H, 30)
     # multiplot(transform_y)
-    # transform_y = syn.transform(nEMGdata)
+    # transform_y = syn.transform(EMGdata)
     # multiplot(transform_y)
 
 
-    
+    print("Test realtime processing")
+    y = [0]*len(EMGdata)
+    for i in range(len(EMGdata)):
+        y[i] = syn.transform([EMGdata[i]])[0]
 
+    multiplot(y)
+
+    from sklearn.linear_model import LinearRegression
+    regressor = LinearRegression()
+
+    regressor.fit(y, Motiondata)
+    angle = regressor.predict(y)
+    multiplot(angle)
+
+
+    filename = os.getcwd() + '/../data/run_data_11_25_2020_13_23_57.csv'
+    data = []
+    with open(filename, newline='') as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            try:
+                data.append([float(value) for value in row])
+            except:
+                print(row)
+
+                pass
+
+    EMGdata = [item[:-6] for item in data]
+    Motiondata = [item[-6:] for item in data]
+
+    data_X = []
+    data_Y = []
+    tem_X = []
+    tem_Y = []
+    pre_j = Motiondata[0]
+
+    for i,j in zip(EMGdata,Motiondata):
+        #print(j)
+        if j != pre_j:
+            data_X.append(tp(tem_X))
+            data_Y.append(tp(tem_Y))
+            tem_X = []
+            tem_Y = []
+        tem_X.append(i)
+        tem_Y.append(j)
+        pre_j = j
+
+    data_X.append(tp(tem_X))
+    data_Y.append(tp(tem_Y))
+
+    transform_y = syn.transform(EMGdata)
+    multiplot(transform_y)
+    angle = regressor.predict(transform_y)
+    multiplot(angle)

@@ -203,7 +203,7 @@ class robot():
         Private function for send binary data for update each devices.
         data_in: bytes, bytes data that separate by "::"
         """
-        datas = data_in.split(str.encode(':'))
+        datas = data_in.split(str.encode('::'))
         for data in datas:
             if len(data) > 0:
                 for device_i in self.devices:

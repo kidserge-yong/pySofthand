@@ -28,6 +28,7 @@ try:
     from smk import *
     from synergy import *
     from menu import *
+    from cnn import *
 except ImportError:
     raise RuntimeError('cannot import module, make sure sys.path is correct')
 
@@ -140,26 +141,33 @@ def main_loop(args=0):
     prosudata_X = np.concatenate((EMGdata[0], EMGdata[5], EMGdata[6]), axis=1)
     prosudata_Y = np.concatenate((Motiondata[0], Motiondata[5], Motiondata[6]), axis=1)
 
-    sum_x = [gripdata_X, wristdata_X, prosudata_X]
-    sum_y = [gripdata_Y, wristdata_Y, prosudata_Y]
+    sum_x = [tp(gripdata_X), tp(wristdata_X), tp(prosudata_X)]
+    sum_y = [tp(gripdata_Y), tp(wristdata_Y), tp(prosudata_Y)]
 
     syn.fit(sum_x, sum_y)
 
-    xsynergy = tp(syn.transform(tp([item[:-6] for item in train_data])))
+    xsynergy = syn.transform([item[:-6] for item in train_data])
     nY = [item[-6:] for item in train_data]
     
+    print(type(EMGdata))
 
-    multiplot(xsynergy)
-    multiplot(nY)
-    
-
+    transform_y = syn.transform([item[:-6] for item in train_data])
     #print(len(xsynergy), len(xsynergy[0]))
     #print(len(nY), len(nY[0]))
+    import torch
+    tensor_y = torch.FloatTensor(transform_y)
+    tensor_motion = torch.FloatTensor([item[-6:] for item in train_data])
+    cnn = cnnRegession(input_n = tensor_y.shape[1], output_n = tensor_motion.shape[1])
+    cnn.train(tensor_y, tensor_motion, BATCH_SIZE = 64, EPOCH = 5)
 
-    regressor.fit(xsynergy, nY)
 
-    angle = regressor.predict(xsynergy)
-    multiplot(angle)
+    #regressor.fit(xsynergy, nY)
+
+    #angle = regressor.predict(xsynergy)
+    angle = cnn.predict(tensor_y)
+
+
+    multiplot(angle.detach().numpy())
 
     """
     Testing model
@@ -170,11 +178,14 @@ def main_loop(args=0):
         while(True):
             if smk.is_new_data:
                 xemg = [smk.emg()]
-                xsyn = tp(syn.transform(tp(xemg)))
+                xsyn = syn.transform(xemg)
                 #xsyn = syn.transform(tp(xemg))
-                angle = regressor.predict(xsyn)
+                tensor_xemg = torch.FloatTensor(xsyn)
+                angle = cnn.predict(tensor_xemg)
 
-                grip_pos = angle[0][0]*19000 + 0
+                #angle = regressor.predict(xsyn)
+
+                grip_pos = angle[0][0]*19000 + 5000
                 #grip_pos = position[0][0]*20000 +3000
                 if grip_pos < 0:
                     grip_pos = 0
@@ -198,7 +209,7 @@ def main_loop(args=0):
                 softhand.movedevice(0, int(grip_pos))
                 softhand.movedevice(1, int(wrist_pos))
                 softhand.movedevice(2, int(prosu_pos))
-                run_data.append([xemg[0], angle[0]])
+                run_data.append(xemg[0] + list(angle[0].detach().numpy()))
     except KeyboardInterrupt:
         print("out of loop")
 

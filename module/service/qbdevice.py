@@ -135,18 +135,21 @@ class device():
         send read position signal to buffer for transmittion
         """
         self.buffer.append(self.__comGetMeasurement())
+        return self.__comGetMeasurement()
 
     def getCurrent(self):
         """
         send read current signal to buffer for transmittion
         """
         self.buffer.append(self.__comGetCurrent())
+        return self.__comGetCurrent()
 
     def calibrate(self, speed = 200, repetitions = 10):
         """
         send calibration signal to buffer for transmittion
         """
         self.buffer.append(self.__comHandCalibrate(speed, repetitions))
+        return self.__comHandCalibrate(speed, repetitions)
 
     def __comActivate(self, activate:bool=True):
         """
