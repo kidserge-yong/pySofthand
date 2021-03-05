@@ -190,7 +190,7 @@ class smk_arrayemg():
         self.serial_port = serial.Serial(serial_port.device, smkcommand.BAUDRATE.value, timeout=1)
         return 1
 
-    def __start_data(self):
+    def __start_data(self, type = "IEMG"):
         """
         create command to intial data transmittion.
         """
@@ -198,9 +198,16 @@ class smk_arrayemg():
             return 0
 
         if self.version == 1:
-            command = bytes([smkcommand.CMD_START.value])
+            if type == "IEMG"
+                command = bytes([smkcommand.CMD_START_IEMG.value])
+            else
+                command = bytes([smkcommand.CMD_START_EMG.value])
         elif self.version == 2:
-            command = smkcommand.CMD_START.value.encode()
+            if type == "EMG"
+                command = smkcommand.CMD_START_IEMG.value.encode()
+            else
+                command = smkcommand.CMD_START_EMG.value.encode()
+            
 
         self.command_buf.append(command)
 
